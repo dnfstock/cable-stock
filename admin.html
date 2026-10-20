@@ -576,10 +576,13 @@ async function initDb(){
     adminBtn.classList.add('active'); document.getElementById('panel-admin').classList.add('active');
     auth.onAuthStateChanged(async u=>{
       if(u && !u.isAnonymous){
-        let ok = false;
-        try{ ok = (await db.collection('admins').doc(u.uid).get()).exists; }catch(e){}
+        let ok = false, why = '';
+        try{
+          ok = (await db.collection('admins').doc(u.uid).get()).exists;
+          if(!ok) why = 'No document found in the "admins" collection with this exact Document ID.';
+        }catch(e){ why = 'Could not read the "admins" collection (' + (e.code || e.message) + '). Check that the Firestore rules are published.'; }
         if(!ok){
-          document.getElementById('loginError').textContent = 'This account is not set up as an Admin.';
+          document.getElementById('loginError').textContent = 'This account is not set up as an Admin. ' + why + ' Your UID is: ' + u.uid;
           document.getElementById('loginError').classList.add('show');
           await auth.signOut(); return;
         }
