@@ -636,7 +636,9 @@ function filterResults({term, cat, unit, watchOnly}){
       return tokens.every(t=>hay.includes(t));
     });
   }
-  return [...results].sort((a,b)=> catRank(a.sheet)-catRank(b.sheet) || a.size.localeCompare(b.size, undefined, {numeric:true}) || a.detail.localeCompare(b.detail, undefined, {numeric:true}) || a.colour.localeCompare(b.colour));
+  const nat = (x,y)=> String(x).localeCompare(String(y), undefined, {numeric:true});
+  const seqOf = c => (typeof c.seq === 'number' ? c.seq : 1e9);   // items without a position go last in their category
+  return [...results].sort((a,b)=> catRank(a.sheet)-catRank(b.sheet) || (seqOf(a)-seqOf(b)) || nat(a.size,b.size) || nat(a.detail,b.detail) || nat(a.colour,b.colour));
 }
 
 function groupBySizeSpec(items){
@@ -1088,6 +1090,7 @@ function labelRow(rows, i){
 
 function extractCatalogFromWorkbook(workbook){
   const items = [], warnings = [];
+  let seqCounter = 0;
   const order = workbook.SheetNames.slice();
   for(const sn of workbook.SheetNames){
     const ws = workbook.Sheets[sn];
@@ -1145,7 +1148,7 @@ function extractCatalogFromWorkbook(workbook){
               orders.push({customer, po, poDate: toIsoMaybe(rq[last+3]), deliveryDate: toIsoMaybe(rq[last+5]), qty: isNum(rq[last+6]) ? rq[last+6] : null});
             }
           }
-          items.push({sheet:sn, size:parsed.size, detail:det, colour:name, unit, stock: Math.round(stock*100)/100, orders, no: isNum(rd[0]) ? Math.round(rd[0]) : rr+1});
+          items.push({sheet:sn, size:parsed.size, detail:det, colour:name, unit, stock: Math.round(stock*100)/100, orders, no: isNum(rd[0]) ? Math.round(rd[0]) : rr+1, seq: seqCounter++});
         });
         r = scan;
         continue;
@@ -1204,11 +1207,14 @@ document.getElementById('importFile').addEventListener('change', async (e)=>{
         const prev = prevById.get(id);
         let body;
         if(!prev){
-          body = {sheet:ni.sheet, size:ni.size, detail:ni.detail, colour:ni.colour, unit:ni.unit, stock:ni.stock, lastChangedAt:now, previousStock:null, delta:null, orders:ni.orders, activity:[]};
+          body = {sheet:ni.sheet, size:ni.size, detail:ni.detail, colour:ni.colour, unit:ni.unit, stock:ni.stock, lastChangedAt:now, previousStock:null, delta:null, orders:ni.orders, activity:[], seq:ni.seq};
           added++;
         } else if(prev.stock !== ni.stock || JSON.stringify(prev.orders)!==JSON.stringify(ni.orders)){
-          body = {sheet:ni.sheet, size:ni.size, detail:ni.detail, colour:ni.colour, unit:ni.unit, stock:ni.stock, lastChangedAt:now, previousStock:prev.stock, delta:r2(ni.stock-prev.stock), orders:ni.orders, activity:prev.activity||[]};
+          body = {sheet:ni.sheet, size:ni.size, detail:ni.detail, colour:ni.colour, unit:ni.unit, stock:ni.stock, lastChangedAt:now, previousStock:prev.stock, delta:r2(ni.stock-prev.stock), orders:ni.orders, activity:prev.activity||[], seq:ni.seq};
           changed++;
+        } else if(prev.seq !== ni.seq){
+          body = {sheet:ni.sheet, size:ni.size, detail:ni.detail, colour:ni.colour, unit:ni.unit, stock:prev.stock, lastChangedAt:prev.lastChangedAt ?? null, previousStock:prev.previousStock ?? null, delta:prev.delta ?? null, orders:prev.orders||[], activity:prev.activity||[], seq:ni.seq};
+          unchanged++;
         } else {
           unchanged++;
           return Promise.resolve();
