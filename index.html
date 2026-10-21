@@ -378,7 +378,15 @@
         <div><label for="ordPo">PO number</label><input id="ordPo" type="text" placeholder="e.g. 26000732"></div>
         <div><label for="ordPoDate">PO date</label><input id="ordPoDate" type="date"></div>
         <div><label for="ordDelivery">Delivery date (all cables)</label><input id="ordDelivery" type="date"></div>
+        <div><label for="ordDelStatus">…or status (all cables)</label>
+          <select id="ordDelStatus" style="font-family:var(--sans); font-size:14px; padding:9px 10px; border:1px solid var(--panel-line); border-radius:3px; width:100%; background:#fff;">
+            <option value="">No status</option>
+            <option value="TBA">TBA — to be advised</option>
+            <option value="WP">WP — waiting production</option>
+            <option value="WPC">WPC — waiting payment clear</option>
+          </select></div>
       </div>
+      <div class="hint" style="margin:10px 0 0;">Every cable needs either a delivery date or a status (TBA, WP or WPC). Set it once here, or choose it for each cable below. A cable with neither cannot be reserved.</div>
     </div>
     <div class="reps-card">
       <div class="rc-title">Cables on this PO</div>
@@ -430,6 +438,26 @@
       <span>Customer</span><span>PO number</span><span>Qty</span><span>Delivery</span>
     </div>
     <div class="order-list" id="omList"></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="delivModal">
+  <div class="adjust-modal">
+    <h3>Edit delivery</h3>
+    <div class="am-meta" id="dvMeta">—</div>
+    <label for="dvSelect">Delivery</label>
+    <select id="dvSelect" style="width:100%; font-family:var(--sans); font-size:14px; padding:9px 10px; border:1px solid var(--panel-line); border-radius:3px; margin-bottom:14px; background:#fff;">
+      <option value="TBA">TBA — to be advised</option>
+      <option value="WP">WP — waiting production</option>
+      <option value="WPC">WPC — waiting payment clear</option>
+      <option value="date">Specific date…</option>
+    </select>
+    <div id="dvDateWrap" style="display:none;"><label for="dvDate">Delivery date</label><input id="dvDate" type="date"></div>
+    <label id="dvAllWrap" style="display:none; font-weight:400; color:var(--graphite); font-size:13px;"><input type="checkbox" id="dvAll" style="width:auto; margin:0 6px 0 0;">Apply to all cables on this PO (<span id="dvAllCount">0</span>)</label>
+    <div class="adjust-actions" style="margin-top:14px;">
+      <button class="mini-btn" id="dvCancel">Cancel</button>
+      <button class="mini-btn ok" id="dvSave">Save</button>
+    </div>
   </div>
 </div>
 
@@ -894,7 +922,7 @@ function openOrderModal(id){
         <div class="or-customer">${escapeHtml(o.customer)}${o.source==='app'?'<span class="app-tag">entered in app</span>':''}</div>
         <div class="or-po">${escapeHtml(o.po||'—')}</div>
         <div class="or-qty">${o.qty!=null?o.qty:'—'}</div>
-        <div class="or-date ${overdue?'overdue':''}">${fmtDate(o.deliveryDate)}${cancelBtn}</div>
+        <div class="or-date ${overdue?'overdue':''}">${fmtDate(o.deliveryDate)}${(canAdmin && o.source==='app') ? `<button class="om-cancel om-edit" style="border-color:var(--steel); color:var(--steel);" data-item="${escapeHtml(item.id)}" data-idx="${idx}">Edit</button>` : ''}${cancelBtn}</div>
       </div>`;
     }).join('');
   }
@@ -934,7 +962,7 @@ function dateRank(v){
 function orderIndex(){
   const out = [];
   catalog.forEach(item=>{
-    (item.orders||[]).forEach(o=>out.push({kind:'order', customer:(o.customer||'').trim() || '—', po:(o.po||'').trim(), qty:o.qty, deliveryDate:o.deliveryDate, item}));
+    (item.orders||[]).forEach((o, idx)=>out.push({kind:'order', customer:(o.customer||'').trim() || '—', po:(o.po||'').trim(), qty:o.qty, deliveryDate:o.deliveryDate, source:o.source, idx, item}));
     (item.activity||[]).forEach(a=>{
       if(a.type === 'out') out.push({kind:'taken', customer:(a.customer||'').trim() || '—', po:(a.po||'').trim(), qty:a.qty, deliveryDate:null, takenAt:a.ts, item});
     });
@@ -975,7 +1003,7 @@ function orderLineHtml(e){
   return `<div class="order-line" data-id="${escapeHtml(it.id)}">
     <div class="ol-item"><div class="ol-name">${escapeHtml(it.colour)}<span class="ol-tag ${e.kind==='taken'?'taken':''}">${e.kind==='taken'?'Stock out':'Reserved'}</span></div><div class="ol-sub">${escapeHtml(sub)}</div></div>
     <div class="ol-qty">${escapeHtml(qty)}</div>
-    <div class="ol-date ${overdue?'overdue':''}">${dateHtml}</div>
+    <div class="ol-date ${overdue?'overdue':''}">${dateHtml}${(canAdmin && e.kind==='order' && e.source==='app') ? `<button class="link-btn ol-edit" data-id="${escapeHtml(it.id)}" data-idx="${e.idx}">Edit delivery</button>` : ''}</div>
   </div>`;
 }
 function renderOrderSearch(){
@@ -1021,6 +1049,8 @@ document.getElementById('orderChips').addEventListener('click', e=>{
   renderOrderSearch();
 });
 document.getElementById('orderRows').addEventListener('click', e=>{
+  const ed = e.target.closest('.ol-edit');
+  if(ed){ openDeliveryEditor(ed.dataset.id, parseInt(ed.dataset.idx, 10)); return; }
   const line = e.target.closest('.order-line');
   if(line) openOrderModal(line.dataset.id);
 });
@@ -1284,11 +1314,34 @@ function updateOrderLive(){
     const av = document.querySelector('.ord-avail b[data-id="' + CSS.escape(l.id) + '"]');
     if(av && it) av.textContent = fmtStock(it);
     const w = document.querySelector('.ord-warn[data-id="' + CSS.escape(l.id) + '"]');
-    if(w) w.textContent = lineWarn(l);
+    if(w) w.textContent = [lineWarn(l), lineDelWarn(l)].filter(Boolean).join(' ');
   });
   const n = ordLines.length, filled = ordLines.filter(l=>parseFloat(l.qty) > 0).length;
   document.getElementById('ordSummary').textContent = n ? `${n} cable${n===1?'':'s'} · ${filled} with quantity` : 'No cables added yet';
 }
+function headerDelivery(){
+  const d = document.getElementById('ordDelivery').value;
+  if(d) return {kind:'date', value:d};
+  const s = document.getElementById('ordDelStatus').value;
+  if(s) return {kind:'status', value:s};
+  return {kind:'none', value:''};
+}
+function inheritLabel(){
+  const hd = headerDelivery();
+  if(hd.kind === 'date') return 'Same as PO (' + fmtDate(isoDay(hd.value)) + ')';
+  if(hd.kind === 'status') return 'Same as PO (' + hd.value + ')';
+  return 'Choose delivery…';
+}
+// the value that will be saved for a line: an ISO date, TBA, WP or WPC — or '' when nothing is chosen yet
+function lineDelivery(l){
+  if(l.mode === 'date') return l.delivery ? isoDay(l.delivery) : '';
+  if(l.mode) return l.mode;
+  const hd = headerDelivery();
+  if(hd.kind === 'date') return isoDay(hd.value);
+  if(hd.kind === 'status') return hd.value;
+  return '';
+}
+function lineDelWarn(l){ return lineDelivery(l) ? '' : 'Choose a delivery date, or TBA / WP / WPC, before reserving.'; }
 function renderOrderLines(focusId){
   const el = document.getElementById('ordLines');
   el.innerHTML = ordLines.map(l=>{
@@ -1298,7 +1351,14 @@ function renderOrderLines(focusId){
       <div class="ol-item"><div class="ol-name">${escapeHtml(it.colour)}</div><div class="ol-sub">${escapeHtml(it.sheet)} · ${escapeHtml(it.size)}${it.detail?' · '+escapeHtml(it.detail):''}</div></div>
       <div class="ord-avail">Available <b data-id="${escapeHtml(l.id)}">${escapeHtml(fmtStock(it))}</b></div>
       <input class="ord-qty" type="number" min="0" step="any" placeholder="Qty (${unitSuffix(it.unit)})" value="${escapeHtml(l.qty)}" data-id="${escapeHtml(l.id)}">
-      ${(l.delivery || l.showDate) ? `<input class="ord-del" type="date" value="${escapeHtml(l.delivery)}" data-id="${escapeHtml(l.id)}" title="Delivery date for this line only">` : `<button class="link-btn ord-datelink" data-id="${escapeHtml(l.id)}">Different delivery date</button>`}
+      <select class="ord-dsel" data-id="${escapeHtml(l.id)}" style="font-family:var(--sans); font-size:13px; padding:9px 8px; border:1px solid var(--panel-line); border-radius:3px; background:#fff; max-width:200px;">
+        <option value="" ${!l.mode?'selected':''}>${escapeHtml(inheritLabel())}</option>
+        <option value="TBA" ${l.mode==='TBA'?'selected':''}>TBA</option>
+        <option value="WP" ${l.mode==='WP'?'selected':''}>WP</option>
+        <option value="WPC" ${l.mode==='WPC'?'selected':''}>WPC</option>
+        <option value="date" ${l.mode==='date'?'selected':''}>Specific date…</option>
+      </select>
+      ${l.mode==='date' ? `<input class="ord-del" type="date" value="${escapeHtml(l.delivery)}" data-id="${escapeHtml(l.id)}">` : ''}
       <button class="ord-rm" data-id="${escapeHtml(l.id)}" title="Remove">×</button>
       <div class="ord-warn" data-id="${escapeHtml(l.id)}"></div>
     </div>`;
@@ -1309,7 +1369,7 @@ function renderOrderLines(focusId){
 }
 function addOrderLine(id){
   if(ordLines.some(l=>l.id === id)){ renderOrderLines(id); return; }
-  ordLines.push({id, qty:'', delivery:''});
+  ordLines.push({id, qty:'', mode:'', delivery:''});
   renderOrderLines(id);
 }
 document.getElementById('ordSearch').addEventListener('input', renderOrderPick);
@@ -1324,9 +1384,17 @@ document.getElementById('ordLines').addEventListener('input', e=>{
   if(e.target.classList.contains('ord-del')) l.delivery = e.target.value;
   updateOrderLive();
 });
+document.getElementById('ordLines').addEventListener('change', e=>{
+  if(!e.target.classList.contains('ord-dsel')) return;
+  const l = ordLines.find(x=>x.id === e.target.dataset.id);
+  if(!l) return;
+  l.mode = e.target.value;
+  renderOrderLines();
+  if(l.mode === 'date'){ const inp = document.querySelector('.ord-del[data-id="' + CSS.escape(l.id) + '"]'); if(inp) inp.focus(); }
+});
+document.getElementById('ordDelivery').addEventListener('input', e=>{ if(e.target.value) document.getElementById('ordDelStatus').value = ''; renderOrderLines(); });
+document.getElementById('ordDelStatus').addEventListener('change', e=>{ if(e.target.value) document.getElementById('ordDelivery').value = ''; renderOrderLines(); });
 document.getElementById('ordLines').addEventListener('click', e=>{
-  const dl = e.target.closest('.ord-datelink');
-  if(dl){ const l = ordLines.find(x=>x.id === dl.dataset.id); if(l){ l.showDate = true; renderOrderLines(); const inp = document.querySelector('.ord-del[data-id="' + CSS.escape(l.id) + '"]'); if(inp) inp.focus(); } return; }
   const rm = e.target.closest('.ord-rm');
   if(rm){ ordLines = ordLines.filter(l=>l.id !== rm.dataset.id); renderOrderLines(); }
 });
@@ -1334,7 +1402,7 @@ function resetOrderForm(keepHeader){
   ordLines = [];
   if(!keepHeader){
     document.getElementById('ordCustomer').value = ''; document.getElementById('ordPo').value = '';
-    document.getElementById('ordDelivery').value = '';
+    document.getElementById('ordDelivery').value = ''; document.getElementById('ordDelStatus').value = '';
   }
   document.getElementById('ordPoDate').value = todayStr();
   document.getElementById('ordSearch').value = '';
@@ -1351,12 +1419,13 @@ document.getElementById('ordSubmit').addEventListener('click', async ()=>{
   const customer = document.getElementById('ordCustomer').value.trim();
   const po = document.getElementById('ordPo').value.trim();
   const poDate = document.getElementById('ordPoDate').value || todayStr();
-  const headDel = document.getElementById('ordDelivery').value;
   if(!customer){ alert('Enter the customer name.'); return; }
   if(!po){ alert('Enter the PO number.'); return; }
   if(!ordLines.length){ alert('Add at least one cable to the order.'); return; }
   const bad = ordLines.filter(l=>!(parseFloat(l.qty) > 0)).map(l=>{ const it = itemById(l.id); return it ? it.colour + ' (' + it.size + ')' : l.id; });
   if(bad.length){ alert('Enter a quantity greater than zero for:\n\n' + bad.slice(0,10).join('\n') + (bad.length > 10 ? '\n…' : '')); return; }
+  const noDel = ordLines.filter(l=>!lineDelivery(l)).map(l=>{ const it = itemById(l.id); return it ? it.colour + ' (' + it.size + ')' : l.id; });
+  if(noDel.length){ alert('Choose a delivery date, or TBA / WP / WPC, for:\n\n' + noDel.slice(0,10).join('\n') + (noDel.length > 10 ? '\n…' : '') + '\n\nA cable without a delivery date or status cannot be reserved.'); return; }
   if(orderIndex().some(e=>e.kind === 'order' && e.po && e.po.toUpperCase() === po.toUpperCase() && e.customer.toUpperCase() === customer.toUpperCase())){
     if(!confirm('PO ' + po + ' for ' + customer + ' already has reserved lines. Adding this will create a second entry for the same PO. Continue?')) return;
   }
@@ -1374,7 +1443,7 @@ document.getElementById('ordSubmit').addEventListener('click', async ()=>{
       const results = await Promise.allSettled(part.map(async l=>{
         const it = itemById(l.id); if(!it) throw new Error('item not found');
         const qty = r2(parseFloat(l.qty));
-        const entry = {customer, po, poDate:isoDay(poDate), deliveryDate: isoDay(l.delivery || headDel) || 'TBA', qty, source:'app', by:actor, createdAt:now};
+        const entry = {customer, po, poDate:isoDay(poDate), deliveryDate: lineDelivery(l), qty, source:'app', by:actor, createdAt:now};
         await db.collection('stock').doc(it.id).set(docBody(it, {stock:r2(it.stock - qty), lastChangedAt:now, previousStock:it.stock, delta:-qty, orders:[...(it.orders||[]), entry]}));
         return {it, qty};
       }));
@@ -1400,6 +1469,8 @@ document.getElementById('ordSubmit').addEventListener('click', async ()=>{
 });
 
 document.getElementById('omList').addEventListener('click', async e=>{
+  const ed = e.target.closest('.om-edit');
+  if(ed){ openDeliveryEditor(ed.dataset.item, parseInt(ed.dataset.idx, 10)); return; }
   const b = e.target.closest('.om-cancel');
   if(!b || !requireAdminName()) return;
   const item = itemById(b.dataset.item), idx = parseInt(b.dataset.idx, 10);
@@ -1414,6 +1485,67 @@ document.getElementById('omList').addEventListener('click', async e=>{
   }catch(err){ alert('Could not cancel: ' + (err && err.message ? err.message : err)); }
 });
 document.getElementById('ordPoDate').value = todayStr();
+
+/* ---------- edit the delivery of a reserved PO line ---------- */
+let dvTarget = null;
+function appLinesForPo(customer, po){
+  const out = [];
+  catalog.forEach(it=>(it.orders || []).forEach((o, i)=>{
+    if(o.source === 'app' && (o.customer||'').trim().toUpperCase() === customer.trim().toUpperCase() && (o.po||'').trim().toUpperCase() === po.trim().toUpperCase()) out.push({item:it, idx:i});
+  }));
+  return out;
+}
+function syncDvDate(){ document.getElementById('dvDateWrap').style.display = document.getElementById('dvSelect').value === 'date' ? '' : 'none'; }
+document.getElementById('dvSelect').addEventListener('change', syncDvDate);
+function openDeliveryEditor(itemId, idx){
+  if(!canAdmin) return;
+  const item = itemById(itemId), o = item && (item.orders || [])[idx];
+  if(!o || o.source !== 'app'){ alert('Only orders entered in the app can be edited here. Orders from the Excel take their delivery from the Excel.'); return; }
+  dvTarget = {itemId, idx, customer:o.customer, po:o.po};
+  document.getElementById('dvMeta').textContent = o.customer + ' · PO ' + o.po + ' — ' + item.colour + ' (' + item.size + ')';
+  const cur = o.deliveryDate || '';
+  const sel = document.getElementById('dvSelect');
+  if(/^\d{4}-\d{2}-\d{2}/.test(cur)){ sel.value = 'date'; document.getElementById('dvDate').value = cur.slice(0, 10); }
+  else { sel.value = ['TBA','WP','WPC'].includes(cur) ? cur : 'TBA'; document.getElementById('dvDate').value = ''; }
+  syncDvDate();
+  const lines = appLinesForPo(o.customer, o.po);
+  document.getElementById('dvAllWrap').style.display = lines.length > 1 ? '' : 'none';
+  document.getElementById('dvAllCount').textContent = lines.length + ' cables';
+  document.getElementById('dvAll').checked = false;
+  document.getElementById('delivModal').classList.add('active');
+}
+document.getElementById('dvCancel').addEventListener('click', ()=>document.getElementById('delivModal').classList.remove('active'));
+document.getElementById('delivModal').addEventListener('click', e=>{ if(e.target.id === 'delivModal') e.currentTarget.classList.remove('active'); });
+document.getElementById('dvSave').addEventListener('click', async ()=>{
+  if(!requireAdminName() || !dvTarget) return;
+  const kind = document.getElementById('dvSelect').value;
+  let value;
+  if(kind === 'date'){
+    const d = document.getElementById('dvDate').value;
+    if(!d){ alert('Pick a delivery date, or choose TBA / WP / WPC.'); return; }
+    value = isoDay(d);
+  } else value = kind;
+  const apply = document.getElementById('dvAll').checked
+    ? appLinesForPo(dvTarget.customer, dvTarget.po)
+    : [{item:itemById(dvTarget.itemId), idx:dvTarget.idx}];
+  // one write per cable, even if the same PO appears twice on it
+  const byItem = new Map();
+  apply.forEach(a=>{ if(!a.item) return; if(!byItem.has(a.item.id)) byItem.set(a.item.id, {item:a.item, idxs:[]}); byItem.get(a.item.id).idxs.push(a.idx); });
+  const btn = document.getElementById('dvSave'); btn.disabled = true; btn.textContent = 'Saving…';
+  let failed = 0;
+  try{
+    const list = [...byItem.values()];
+    for(let i = 0; i < list.length; i += 10){
+      const res = await Promise.allSettled(list.slice(i, i + 10).map(({item, idxs})=>{
+        const orders = (item.orders || []).map((o, k)=> (idxs.includes(k) && o.source === 'app') ? Object.assign({}, o, {deliveryDate:value}) : o);
+        return db.collection('stock').doc(item.id).set(docBody(item, {orders}));
+      }));
+      failed += res.filter(r=>r.status === 'rejected').length;
+    }
+  }finally{ btn.disabled = false; btn.textContent = 'Save'; }
+  if(failed) alert(failed + ' cable(s) could not be updated. Please try again.');
+  else document.getElementById('delivModal').classList.remove('active');
+});
 
 /* ---------- bottom tabs ---------- */
 function showTab(name){
