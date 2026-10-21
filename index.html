@@ -221,6 +221,28 @@
   .txn-row.fresh{background:#fbf3f1;}
   .unit-tag.kg{background:#dfe8d8; color:#3b5a2a;}
   .gh-total{margin-left:auto; font-family:var(--mono); font-size:11.5px; color:var(--steel);}
+  .seg-toggle{display:flex; margin:0 0 14px; border:1px solid var(--panel-line); border-radius:4px; overflow:hidden; background:#fff;}
+  .seg-btn{flex:1; padding:11px 8px; border:none; background:none; font-family:var(--display); font-size:14px; font-weight:600; color:var(--steel); cursor:pointer;}
+  .seg-btn.active{background:var(--brand); color:#fff;}
+  .chips{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 14px;}
+  .chip{background:#fff; border:1px solid var(--panel-line); border-radius:16px; padding:6px 12px; font-size:12.5px; cursor:pointer; font-family:var(--sans); color:var(--graphite);}
+  .chip span{color:var(--steel); font-family:var(--mono); font-size:11px; margin-left:4px;}
+  .chip:hover{border-color:var(--brand);}
+  .chips-title{width:100%; font-size:12px; color:var(--steel); font-weight:600;}
+  .po-head{padding:8px 16px; background:#faf9f6; border-bottom:1px solid var(--panel-line); font-family:var(--mono); font-size:12px; display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap;}
+  .po-head .po-meta{color:var(--steel);}
+  .order-line{display:flex; align-items:center; gap:12px; padding:9px 16px; border-bottom:1px solid var(--panel-line); cursor:pointer; flex-wrap:wrap;}
+  .order-line:last-child{border-bottom:none;}
+  .order-line:hover{background:#f7f8f6;}
+  .ol-item{flex:1; min-width:170px;}
+  .ol-name{font-weight:600; font-size:13.5px;}
+  .ol-sub{font-size:11.5px; color:var(--steel); font-family:var(--mono);}
+  .ol-qty{font-family:var(--mono); font-weight:700; font-size:14px; min-width:84px; text-align:right;}
+  .ol-date{font-size:12px; color:var(--steel); min-width:120px; text-align:right;}
+  .ol-date b{display:block; font-weight:600; color:var(--graphite); font-size:12.5px;}
+  .ol-date.overdue b{color:var(--alarm);}
+  .ol-tag{display:inline-block; font-size:10.5px; font-weight:600; padding:1px 7px; border-radius:2px; margin-left:6px; background:#e1efe6; color:var(--live); font-family:var(--sans);}
+  .ol-tag.taken{background:#f7ded9; color:var(--alarm);}
 </style>
 </head>
 <body>
@@ -293,12 +315,29 @@
 
   <!-- SEARCH -->
   <div class="panel" id="panel-search">
-    <div class="controls">
-      <input id="searchInput" class="search-big" type="search" placeholder="Type size or spec, e.g. 2.5mm 4 core, black, CU-XSP">
+    <div class="seg-toggle">
+      <button class="seg-btn active" data-mode="cable">Cable</button>
+      <button class="seg-btn" data-mode="order">Customer / PO</button>
     </div>
-    <div class="summary" id="searchSummary">—</div>
-    <div id="searchRows"></div>
-    <div class="empty" id="searchEmpty" style="display:none;">No matching cable found. Check the size or spec and try again.</div>
+
+    <div id="cableSearch">
+      <div class="controls">
+        <input id="searchInput" class="search-big" type="search" placeholder="Type size or spec, e.g. 2.5mm 4 core, black, CU-XSP">
+      </div>
+      <div class="summary" id="searchSummary">—</div>
+      <div id="searchRows"></div>
+      <div class="empty" id="searchEmpty" style="display:none;">No matching cable found. Check the size or spec and try again.</div>
+    </div>
+
+    <div id="orderSearch" style="display:none;">
+      <div class="controls">
+        <input id="orderInput" class="search-big" type="search" placeholder="Type customer name or PO number, e.g. GENETECH or 26000732">
+      </div>
+      <div class="summary" id="orderSummary">—</div>
+      <div class="chips" id="orderChips"></div>
+      <div id="orderRows"></div>
+      <div class="empty" id="orderEmpty" style="display:none;">No order found. Check the customer name or PO number and try again.</div>
+    </div>
   </div>
 
   <!-- SETTINGS (Admin only) -->
@@ -732,6 +771,7 @@ function render(){
       : `${results.length} items across ${new Set(results.map(c=>c.sheet)).size} categories`;
   }
   renderSearch();
+  renderOrderSearch();
 }
 
 function renderSearch(){
@@ -825,6 +865,112 @@ document.getElementById('orderModalClose').addEventListener('click', ()=>documen
 document.getElementById('orderModal').addEventListener('click', (e)=>{ if(e.target.id==='orderModal') e.currentTarget.classList.remove('active'); });
 
 document.getElementById('searchInput').addEventListener('input', renderSearch);
+
+/* ---------- Search by customer name / PO number ---------- */
+function dateRank(v){
+  if(typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) return new Date(v).getTime();
+  return v ? 9e15 : 9.5e15;   // text statuses (WPC, TBA...) after dates, blanks last
+}
+function orderIndex(){
+  const out = [];
+  catalog.forEach(item=>{
+    (item.orders||[]).forEach(o=>out.push({kind:'order', customer:(o.customer||'').trim() || '—', po:(o.po||'').trim(), qty:o.qty, deliveryDate:o.deliveryDate, item}));
+    (item.activity||[]).forEach(a=>{
+      if(a.type === 'out') out.push({kind:'taken', customer:(a.customer||'').trim() || '—', po:(a.po||'').trim(), qty:a.qty, deliveryDate:null, takenAt:a.ts, item});
+    });
+  });
+  return out;
+}
+function buildOrderGroups(idx, term){
+  const tokens = term.toLowerCase().split(/\s+/).filter(Boolean);
+  const hit = idx.filter(e=>{ const hay = (e.customer + ' ' + e.po).toLowerCase(); return tokens.every(t=>hay.includes(t)); });
+  const byCust = new Map();
+  hit.forEach(e=>{
+    const ck = e.customer.toUpperCase();
+    if(!byCust.has(ck)) byCust.set(ck, {customer:e.customer, pos:new Map(), lines:0});
+    const c = byCust.get(ck); c.lines++;
+    const pk = e.po || '(no PO number)';
+    if(!c.pos.has(pk)) c.pos.set(pk, []);
+    c.pos.get(pk).push(e);
+  });
+  const rank = e => e.kind === 'taken' ? 9.6e15 : dateRank(e.deliveryDate);
+  const groups = [...byCust.values()].map(c=>({
+    customer: c.customer, lines: c.lines,
+    pos: [...c.pos.entries()].map(([po, list])=>({po, list: list.sort((a,b)=>rank(a)-rank(b) || (a.item.seq??1e9)-(b.item.seq??1e9)), first: Math.min(...list.map(rank))})).sort((a,b)=>a.first-b.first)
+  }));
+  groups.sort((a,b)=>a.customer.localeCompare(b.customer));
+  return {groups, total: hit.length};
+}
+function orderLineHtml(e){
+  const it = e.item;
+  const sub = [it.sheet, it.size + (it.detail ? ' · ' + it.detail : '')].join(' · ');
+  const qty = (e.qty !== null && e.qty !== undefined) ? (r2(e.qty) + ' ' + unitSuffix(it.unit)) : '—';
+  let dateHtml;
+  if(e.kind === 'taken'){
+    dateHtml = `<b>Taken</b>${new Date(e.takenAt).toLocaleDateString(undefined,{day:'2-digit',month:'short',year:'numeric'})}`;
+  } else {
+    dateHtml = `<b>${escapeHtml(fmtDate(e.deliveryDate))}</b>Delivery`;
+  }
+  const overdue = e.kind === 'order' && isOverdue(e.deliveryDate);
+  return `<div class="order-line" data-id="${escapeHtml(it.id)}">
+    <div class="ol-item"><div class="ol-name">${escapeHtml(it.colour)}<span class="ol-tag ${e.kind==='taken'?'taken':''}">${e.kind==='taken'?'Stock out':'Reserved'}</span></div><div class="ol-sub">${escapeHtml(sub)}</div></div>
+    <div class="ol-qty">${escapeHtml(qty)}</div>
+    <div class="ol-date ${overdue?'overdue':''}">${dateHtml}</div>
+  </div>`;
+}
+function renderOrderSearch(){
+  const term = document.getElementById('orderInput').value.trim();
+  const rowsEl = document.getElementById('orderRows');
+  const emptyEl = document.getElementById('orderEmpty');
+  const summaryEl = document.getElementById('orderSummary');
+  const chipsEl = document.getElementById('orderChips');
+  if(!catalog.length){
+    rowsEl.innerHTML = '<div class="empty">' + stockEmptyMessage() + '</div>';
+    chipsEl.innerHTML = ''; emptyEl.style.display = 'none'; summaryEl.textContent = '';
+    return;
+  }
+  const idx = orderIndex();
+  if(!term){
+    const counts = new Map();
+    idx.forEach(e=>{ const k = e.customer.toUpperCase(); counts.set(k, (counts.get(k)||0) + 1); });
+    const top = [...counts.entries()].sort((a,b)=>b[1]-a[1] || a[0].localeCompare(b[0])).slice(0, 40);
+    chipsEl.innerHTML = top.length
+      ? '<div class="chips-title">Customers with orders — tap a name to see their stock and delivery dates</div>' + top.map(([name,n])=>`<button class="chip" data-q="${escapeHtml(name)}">${escapeHtml(name)}<span>${n}</span></button>`).join('')
+      : '';
+    rowsEl.innerHTML = ''; emptyEl.style.display = 'none';
+    summaryEl.textContent = idx.length ? `${counts.size} customers · ${idx.length} order lines` : 'No customer orders on record yet.';
+    return;
+  }
+  chipsEl.innerHTML = '';
+  const {groups, total} = buildOrderGroups(idx, term);
+  emptyEl.style.display = groups.length ? 'none' : 'block';
+  rowsEl.innerHTML = groups.map(g=>{
+    const poHtml = g.pos.map(p=>{
+      const firstDate = p.list.find(e=>e.kind==='order' && /^\d{4}/.test(e.deliveryDate||''));
+      return `<div class="po-head"><span>PO ${escapeHtml(p.po)}</span><span class="po-meta">${p.list.length} item${p.list.length===1?'':'s'}${firstDate?' · earliest delivery '+escapeHtml(fmtDate(firstDate.deliveryDate)):''}</span></div>` + p.list.map(orderLineHtml).join('');
+    }).join('');
+    return `<div class="size-group"><div class="size-group-header"><span class="size-big">${escapeHtml(g.customer)}</span><span class="gh-total">${g.pos.length} PO · ${g.lines} line${g.lines===1?'':'s'}</span></div>${poHtml}</div>`;
+  }).join('');
+  summaryEl.textContent = groups.length ? `${groups.length} customer${groups.length===1?'':'s'} · ${total} order line${total===1?'':'s'}` : '';
+}
+document.getElementById('orderInput').addEventListener('input', renderOrderSearch);
+document.getElementById('orderChips').addEventListener('click', e=>{
+  const chip = e.target.closest('.chip');
+  if(!chip) return;
+  document.getElementById('orderInput').value = chip.dataset.q;
+  renderOrderSearch();
+});
+document.getElementById('orderRows').addEventListener('click', e=>{
+  const line = e.target.closest('.order-line');
+  if(line) openOrderModal(line.dataset.id);
+});
+document.querySelectorAll('.seg-btn').forEach(b=>b.addEventListener('click', ()=>{
+  document.querySelectorAll('.seg-btn').forEach(x=>x.classList.toggle('active', x === b));
+  const order = b.dataset.mode === 'order';
+  document.getElementById('cableSearch').style.display = order ? 'none' : '';
+  document.getElementById('orderSearch').style.display = order ? '' : 'none';
+  setTimeout(()=>document.getElementById(order ? 'orderInput' : 'searchInput').focus(), 60);
+}));
 document.getElementById('categorySelect').addEventListener('change', render);
 document.getElementById('unitSelect').addEventListener('change', render);
 document.getElementById('statusSelect').addEventListener('change', render);
@@ -1036,7 +1182,7 @@ function showTab(name){
   document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active', p.id === 'panel-'+name));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab === name));
   window.scrollTo(0, 0);
-  if(name === 'search') setTimeout(()=>document.getElementById('searchInput').focus(), 60);
+  if(name === 'search') setTimeout(()=>{ const o = document.getElementById('orderSearch').style.display !== 'none'; document.getElementById(o ? 'orderInput' : 'searchInput').focus(); }, 60);
 }
 document.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click', ()=>showTab(b.dataset.tab)));
 
