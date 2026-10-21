@@ -5,6 +5,7 @@
 <title>DNF Cable Stock</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="config.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -218,6 +219,8 @@
   .rc-head .rc-title{margin:0;}
   .link-btn{background:none; border:none; color:var(--brand); font-size:12px; cursor:pointer; padding:0; text-decoration:underline; font-family:var(--sans);}
   .txn-row.fresh{background:#fbf3f1;}
+  .unit-tag.kg{background:#dfe8d8; color:#3b5a2a;}
+  .gh-total{margin-left:auto; font-family:var(--mono); font-size:11.5px; color:var(--steel);}
 </style>
 </head>
 <body>
@@ -258,9 +261,10 @@
     <div class="controls">
       <select id="categorySelect"><option value="">All categories</option></select>
       <select id="unitSelect">
-        <option value="">Coil + Meter</option>
+        <option value="">All units</option>
         <option value="coil">Coil only</option>
         <option value="meter">Meter only</option>
+        <option value="kg">Kg only</option>
       </select>
       <select id="statusSelect">
         <option value="">All status</option>
@@ -346,7 +350,7 @@
       <input id="adjPoInput" type="text" placeholder="e.g. PO-2031">
     </div>
     <label id="adjQtyLabel">Quantity</label>
-    <input id="adjQtyInput" type="number" min="0" placeholder="e.g. 200">
+    <input id="adjQtyInput" type="number" min="0" step="any" placeholder="e.g. 200">
     <div class="adjust-actions">
       <button class="mini-btn" id="adjCancelBtn">Cancel</button>
       <button class="mini-btn ok" id="adjConfirmBtn">Confirm</button>
@@ -374,9 +378,10 @@
     <select id="niUnitSelect">
       <option value="coil">Coil</option>
       <option value="meter">Meter</option>
+      <option value="kg">Kg</option>
     </select>
     <label>Initial quantity</label>
-    <input id="niQtyInput" type="number" min="0" placeholder="e.g. 1000">
+    <input id="niQtyInput" type="number" min="0" step="any" placeholder="e.g. 1000">
     <div class="adjust-actions">
       <button class="mini-btn" id="niCancelBtn">Cancel</button>
       <button class="mini-btn ok" id="niConfirmBtn">Create item</button>
@@ -427,6 +432,10 @@ function itemKey(item){ return [item.sheet, item.size, item.detail, item.colour,
 
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+function unitName(u){ return u==='coil' ? 'Coil' : u==='kg' ? 'Kg' : 'Meter'; }
+function unitSuffix(u){ return u==='coil' ? 'coil' : u==='kg' ? 'kg' : 'm'; }
+function r2(n){ return Math.round(n*100)/100; }
+function fmtStock(item){ return item.unit==='kg' ? (r2(item.stock) + ' kg') : String(item.stock); }
 function statusFor(item){
   const stock = item.stock;
   if(stock < 0) return {label:'Backorder', cls:'back'};
@@ -451,7 +460,7 @@ function deltaHtml(item){
   const dir = item.delta > 0 ? 'up' : item.delta < 0 ? 'down' : '';
   const arrow = item.delta > 0 ? '▲' : item.delta < 0 ? '▼' : '';
   if(!arrow) return '';
-  return `<span class="delta ${stale?'stale':dir}">${arrow}${Math.abs(item.delta)} · ${fmtAgo(item.lastChangedAt)}</span>`;
+  return `<span class="delta ${stale?'stale':dir}">${arrow}${r2(Math.abs(item.delta))} · ${fmtAgo(item.lastChangedAt)}</span>`;
 }
 function fmtDate(val){
   if(!val) return '—';
@@ -531,14 +540,6 @@ async function setLive(on){
   document.getElementById('liveLabel').textContent = on ? 'Live' : 'Offline — showing last saved snapshot';
 }
 
-const firebaseConfig = {
-  apiKey: "AIzaSyB8ufLKB0YjF02q36AdYTjb9y-W1TY96oI",
-  authDomain: "dnfcable-stock.firebaseapp.com",
-  projectId: "dnfcable-stock",
-  storageBucket: "dnfcable-stock.firebasestorage.app",
-  messagingSenderId: "837085924539",
-  appId: "1:837085924539:web:021d293481de5ee24b2d9e"
-};
 
 let currentUser = null, canAdmin = false, repsData = [], started = false, loadErrorMsg = '';
 function slugify(s){ return String(s).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,60) || 'unknown'; }
@@ -662,8 +663,8 @@ function resultsHtml(results){
       const row = `<div class="colour-row">
         <button class="star-btn ${watched?'active':''}" data-key="${escapeHtml(key)}">${watched?'★':'☆'}</button>
         <div class="cr-colour">${escapeHtml(item.colour)}</div>
-        <div class="cr-unit"><span class="unit-tag ${item.unit}">${item.unit==='coil'?'Coil':'Meter'}</span></div>
-        <div class="cr-stock" data-id="${escapeHtml(item.id)}"><span class="num">${item.stock}</span>${deltaHtml(item)}${orderCount?`<span class="order-hint">${orderCount} order${orderCount===1?'':'s'} — tap</span>`:''}</div>
+        <div class="cr-unit"><span class="unit-tag ${item.unit}">${unitName(item.unit)}</span></div>
+        <div class="cr-stock" data-id="${escapeHtml(item.id)}"><span class="num">${fmtStock(item)}</span>${deltaHtml(item)}${orderCount?`<span class="order-hint">${orderCount} order${orderCount===1?'':'s'} — tap</span>`:''}</div>
         <div class="cr-status"><span class="status ${st.cls}">${st.label}</span></div>
         ${adminBtns}
       </div>`;
@@ -674,6 +675,7 @@ function resultsHtml(results){
       <div class="size-group-header">
         <span class="cat-label">${escapeHtml(g.sheet)}</span>
         <span class="size-big">${escapeHtml(g.size)}${g.detail?' &nbsp;·&nbsp; '+escapeHtml(g.detail):''}</span>
+        ${g.items[0].unit==='kg' ? `<span class="gh-total">${r2(g.items.reduce((s,i)=>s+Math.max(0,i.stock),0))} kg available · ${g.items.filter(i=>i.stock>0).length} of ${g.items.length} rolls</span>` : ''}
       </div>
       ${rowsHtml}
     </div>`;
@@ -759,7 +761,7 @@ function openOrderModal(id){
   const item = catalog.find(c=>c.id===id);
   if(!item) return;
   document.getElementById('omTitle').textContent = `${item.size}${item.detail?' · '+item.detail:''} — ${item.colour}`;
-  document.getElementById('omMeta').textContent = `${item.sheet} · Current stock: ${item.stock} ${item.unit==='coil'?'coil':'m'}`;
+  document.getElementById('omMeta').textContent = `${item.sheet} · Current stock: ${r2(item.stock)} ${unitSuffix(item.unit)}`;
   const orders = item.orders || [];
   const activity = item.activity || [];
   const cols = document.getElementById('omCols');
@@ -826,7 +828,7 @@ function openAdjustModal(id, mode){
   adjustTargetId = id;
   adjustMode = mode;
   document.getElementById('adjTitle').textContent = mode === 'in' ? 'Stock In' : 'Stock Out';
-  document.getElementById('adjMeta').textContent = `${item.sheet} · ${item.size}${item.detail?' · '+item.detail:''} — ${item.colour} · Current stock: ${item.stock} ${item.unit==='coil'?'coil':'m'}`;
+  document.getElementById('adjMeta').textContent = `${item.sheet} · ${item.size}${item.detail?' · '+item.detail:''} — ${item.colour} · Current stock: ${r2(item.stock)} ${unitSuffix(item.unit)}`;
   document.getElementById('adjOutFields').style.display = mode === 'out' ? 'block' : 'none';
   document.getElementById('adjQtyLabel').textContent = mode === 'in' ? 'Quantity received' : 'Quantity taken';
   document.getElementById('adjCustomerInput').value = '';
@@ -855,7 +857,7 @@ document.getElementById('adjConfirmBtn').addEventListener('click', async ()=>{
   if(!item || !db) return;
 
   const amount = adjustMode === 'in' ? qty : -qty;
-  const newStock = item.stock + amount;
+  const newStock = r2(item.stock + amount);
   const now = new Date().toISOString();
   const activityEntry = adjustMode === 'in'
     ? {type:'in', customer:'', po:'', qty: qty, actor, ts: now}
@@ -976,7 +978,7 @@ function txnRowsHtml(list, showActor, seenAt){
     const detailTxt = t.delta > 0 ? 'Stock in' : `Taken by ${escapeHtml(t.customer||'—')} · PO ${escapeHtml(t.po||'—')}`;
     const fresh = seenAt && t.ts > seenAt;
     return `<div class="txn-row ${dir} ${fresh?'fresh':''}">
-      <span class="txn-delta ${dir}">${arrow}${t.delta}</span>
+      <span class="txn-delta ${dir}">${arrow}${r2(t.delta)}</span>
       <span class="txn-item">${escapeHtml(t.sheet)} — ${escapeHtml(t.size)}${t.detail?' · '+escapeHtml(t.detail):''} — ${escapeHtml(t.colour)}${fresh?'<span class="new-tag">New</span>':''}<span class="txn-note">${detailTxt}${showActor?' · '+escapeHtml(t.actor):''}</span></span>
       <span class="txn-time">${fmtAgo(t.ts)}</span>
     </div>`;
@@ -1026,7 +1028,10 @@ function parseSpec(spec){
   if(m) return { size: m[1].replace(/\s+/g,''), detail: m[2].replace(/^[-x\s]+/,'').trim() };
   return { size: spec, detail: '' };
 }
-function unitFor(colour, spec){ return /mtr|meter/i.test(colour+' '+spec) ? 'meter' : 'coil'; }
+function unitFor(colour, spec, sheetKg){
+  if(sheetKg) return 'kg';
+  return /mtr|meter/i.test(colour+' '+spec) ? 'meter' : 'coil';
+}
 function parseSchedule(sched){
   const m = sched.trim().match(/^(.*?)\s*\(\s*PO\s*(.*?)\s*\)\s*$/i);
   if(m) return {customer:m[1].trim(), po:m[2].trim()};
@@ -1047,115 +1052,146 @@ function toIsoMaybe(v){
   return null;
 }
 
+/* ---- balance-sheet reader ----
+   Handles: "Size:", "Size :" and "Size70 mm" headers; PALLET / product labels above a size block;
+   rows whose colour is blank (colour carried down from the row above, e.g. copper tape rolls);
+   rows with a colour but no running number; sheets counted in kg (title contains "kg");
+   duplicate names inside one size block (made unique so nothing overwrites anything). */
+const SIZE_RE = /^\s*size\s*:?\s*(.*)$/i;
+function isNum(v){ return typeof v === 'number' && isFinite(v); }
+function isBlank(v){ return v === null || v === undefined || v === ''; }
+function isSizeHdr(b){ return typeof b === 'string' && /^\s*size/i.test(b) && SIZE_RE.test(b); }
+function labelRow(rows, i){
+  const r = rows[i] || [], b = r[1];
+  if(!(typeof b === 'string' && b.trim() && isBlank(r[0]) && !isSizeHdr(b) && b.trim().toLowerCase() !== 'colour')) return false;
+  if(r.slice(2).some(isNum)) return false;
+  let j = i + 1;
+  while(j < rows.length && (rows[j] || []).every(isBlank)) j++;
+  return j < rows.length && isSizeHdr((rows[j] || [])[1]);
+}
+
 function extractCatalogFromWorkbook(workbook){
-  const items = [];
+  const items = [], warnings = [];
+  const order = workbook.SheetNames.slice();
   for(const sn of workbook.SheetNames){
     const ws = workbook.Sheets[sn];
-    const rows = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null, cellDates:true});
-    let currentSpec = null;
-    let blockStarts = [];
-    let r = 0;
+    const rows = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null, blankrows:true, cellDates:true});
+    const title = rows.slice(0,7).map(r=>r[0]).filter(v=>typeof v === 'string').join(' ');
+    const sheetKg = /\d\s*kg|\bkg\b/i.test(title);
+    let section = '';
+    let r = 0, carriedRows = 0;
     while(r < rows.length){
-      const row = rows[r] || [];
-      const colB = row[1];
-      if(typeof colB === 'string' && colB.trim().toLowerCase().startsWith('size:')){
-        currentSpec = colB.trim().slice(5).trim();
-        const titlesRow = rows[r+1] || [];
-        blockStarts = [];
-        titlesRow.forEach((v, idx) => { if(typeof v === 'string' && v.trim().toLowerCase() === 'store balance') blockStarts.push(idx); });
-        const itemStartRow = r + 2;
-        let scan = itemStartRow;
-        const itemRows = [];
+      const row = rows[r] || [], b = row[1];
+      if(isSizeHdr(b)){
+        const spec = SIZE_RE.exec(b)[1].trim();
+        const parsed = parseSpec(spec);
+        const titles = rows[r+1] || [];
+        const starts = [];
+        titles.forEach((v, idx)=>{ if(typeof v === 'string' && v.trim().toLowerCase() === 'store balance') starts.push(idx); });
+        let scan = r + 2;
+        const cands = [];
         while(scan < rows.length){
-          const b = (rows[scan]||[])[1];
-          if(typeof b === 'string' && b.trim().toLowerCase().startsWith('size:')) break;
-          const a = (rows[scan]||[])[0];
-          if(a !== null && a !== undefined) itemRows.push(scan);
+          const rw = rows[scan] || [], bb = rw[1];
+          if(isSizeHdr(bb) || labelRow(rows, scan)) break;
+          if(isNum(rw[0]) || (typeof bb === 'string' && bb.trim())) cands.push(scan);
           scan++;
         }
-        const blockEnd = scan;
-        const lastBlockStart = blockStarts.length ? Math.max(...blockStarts) : null;
-        itemRows.forEach((itemRow, idx)=>{
-          const rowEnd = idx+1 < itemRows.length ? itemRows[idx+1] : blockEnd;
-          const itemRowData = rows[itemRow] || [];
-          const colourRaw = itemRowData[1];
-          let stockVal = null;
-          if(lastBlockStart !== null){
-            stockVal = itemRowData[lastBlockStart+7];
-            if(stockVal === null || stockVal === undefined){
-              for(const c of [...blockStarts].sort((a,b)=>b-a)){
-                const v = itemRowData[c+7];
-                if(v !== null && v !== undefined){ stockVal = v; break; }
-              }
+        const last = starts.length ? Math.max(...starts) : null;
+        let lastColour = '';
+        cands.forEach((rr, k)=>{
+          const rd = rows[rr] || [];
+          const rend = k + 1 < cands.length ? cands[k+1] : scan;
+          let colour = (!isBlank(rd[1]) && String(rd[1]).trim()) ? String(rd[1]).trim() : '';
+          let carried = false;
+          if(colour) lastColour = colour; else { colour = lastColour; carried = true; }
+          let stock = null;
+          if(last !== null){
+            stock = rd[last+7];
+            if(isBlank(stock)){
+              for(const c of [...starts].sort((x,y)=>y-x)){ const v = rd[c+7]; if(!isBlank(v)){ stock = v; break; } }
             }
           }
-          const colourStr = (colourRaw !== null && colourRaw !== undefined) ? String(colourRaw).trim() : '';
-          if(colourStr && colourStr.toUpperCase() !== 'TBA' && typeof stockVal === 'number' && lastBlockStart !== null){
-            const parsed = parseSpec(currentSpec);
-            const unit = unitFor(colourStr, currentSpec);
-            const orders = [];
-            const seen = new Set();
-            for(let rr=itemRow; rr<rowEnd; rr++){
-              const rd = rows[rr] || [];
-              const datePO = rd[lastBlockStart+3];
-              const schedule = rd[lastBlockStart+4];
-              const delDate = rd[lastBlockStart+5];
-              const qtyOrder = rd[lastBlockStart+6];
-              if(typeof schedule === 'string' && schedule.trim()){
-                const {customer, po} = parseSchedule(schedule);
-                const k = customer+'|'+po;
-                if(seen.has(k)) continue;
-                seen.add(k);
-                orders.push({customer, po, poDate: toIsoMaybe(datePO), deliveryDate: toIsoMaybe(delDate), qty: typeof qtyOrder==='number'?qtyOrder:null});
-              }
+          if(!colour || colour.toUpperCase() === 'TBA' || !isNum(stock) || last === null) return;
+          const unit = unitFor(colour, spec, sheetKg);
+          let name = colour, det = parsed.detail;
+          if(unit === 'kg') name = 'Roll ' + (isNum(rd[0]) ? Math.round(rd[0]) : '?') + ' · ' + colour;
+          else if(carried) carriedRows++;
+          if(section) det = det ? det + ' · ' + section : section;
+          const orders = [], seen = new Set();
+          for(let q = rr; q < rend; q++){
+            const rq = rows[q] || [];
+            const sched = rq[last+4];
+            if(typeof sched === 'string' && sched.trim()){
+              const {customer, po} = parseSchedule(sched);
+              const kk = customer + '|' + po;
+              if(seen.has(kk)) continue;
+              seen.add(kk);
+              orders.push({customer, po, poDate: toIsoMaybe(rq[last+3]), deliveryDate: toIsoMaybe(rq[last+5]), qty: isNum(rq[last+6]) ? rq[last+6] : null});
             }
-            items.push({sheet: sn, size: parsed.size, detail: parsed.detail, colour: colourStr, unit, stock: stockVal, orders});
           }
+          items.push({sheet:sn, size:parsed.size, detail:det, colour:name, unit, stock: Math.round(stock*100)/100, orders, no: isNum(rd[0]) ? Math.round(rd[0]) : rr+1});
         });
-        r = blockEnd;
+        r = scan;
         continue;
       }
+      if(labelRow(rows, r)) section = String(b).trim();
       r++;
     }
+    if(carriedRows) warnings.push(sn + ': ' + carriedRows + ' row(s) had no colour name and used the name from the row above');
   }
-  return items;
+  // two rows with the same name in one size block must not overwrite each other
+  const used = new Set();
+  items.forEach(it=>{
+    const k = [it.sheet, it.size, it.detail, it.colour, it.unit].join('||');
+    if(used.has(k)){ it.colour = it.colour + ' (line ' + it.no + ')'; }
+    used.add([it.sheet, it.size, it.detail, it.colour, it.unit].join('||'));
+  });
+  return {items, order, warnings};
 }
 
 function showImportStatus(msg, ok){
   const el = document.getElementById('importStatus');
   el.textContent = msg;
   el.className = 'import-status show ' + (ok?'ok':'err');
-  if(ok) setTimeout(()=>el.classList.remove('show'), 6000);
+  if(ok) setTimeout(()=>el.classList.remove('show'), 20000);
 }
 
 document.getElementById('importBtn').addEventListener('click', ()=>document.getElementById('importFile').click());
 document.getElementById('importFile').addEventListener('change', async (e)=>{
   const file = e.target.files[0];
   if(!file || !db) return;
+  if(!canAdmin){ alert('Only Admin accounts can import stock.'); e.target.value = ''; return; }
   const btn = document.getElementById('importBtn');
   btn.disabled = true; btn.textContent = 'Importing…';
   try{
     const buf = await file.arrayBuffer();
     const workbook = XLSX.read(buf, {type:'array'});
-    const newItems = extractCatalogFromWorkbook(workbook);
+    const parsedWb = extractCatalogFromWorkbook(workbook);
+    const newItems = parsedWb.items;
     if(!newItems.length) throw new Error('No stock rows recognised — check the file matches the balance sheet format.');
-    const newSheets = [...new Set(newItems.map(i=>i.sheet))].filter(s=>!categoryOrder.includes(s));
-    newSheets.forEach(s=>{ categoryOrder.push(s); ensureCategorySubscribed(s); });
+
+    // category order follows the Excel sheet order; categories added by hand stay at the end
+    const extras = categoryOrder.filter(c=>!parsedWb.order.includes(c));
+    categoryOrder = [...parsedWb.order, ...extras];
+    categoryOrder.forEach(ensureCategorySubscribed);
+
     const now = new Date().toISOString();
     const prevById = new Map(catalog.map(c=>[c.id, c]));
-    let changed = 0, unchanged = 0;
+    let added = 0, changed = 0, unchanged = 0;
+    const newIds = new Set();
     const chunks = [];
     for(let i=0;i<newItems.length;i+=25) chunks.push(newItems.slice(i,i+25));
     for(const chunk of chunks){
       await Promise.all(chunk.map(ni=>{
         const id = itemDocId(ni);
+        newIds.add(id);
         const prev = prevById.get(id);
         let body;
         if(!prev){
           body = {sheet:ni.sheet, size:ni.size, detail:ni.detail, colour:ni.colour, unit:ni.unit, stock:ni.stock, lastChangedAt:now, previousStock:null, delta:null, orders:ni.orders, activity:[]};
-          changed++;
+          added++;
         } else if(prev.stock !== ni.stock || JSON.stringify(prev.orders)!==JSON.stringify(ni.orders)){
-          body = {sheet:ni.sheet, size:ni.size, detail:ni.detail, colour:ni.colour, unit:ni.unit, stock:ni.stock, lastChangedAt:now, previousStock:prev.stock, delta:ni.stock-prev.stock, orders:ni.orders, activity:prev.activity||[]};
+          body = {sheet:ni.sheet, size:ni.size, detail:ni.detail, colour:ni.colour, unit:ni.unit, stock:ni.stock, lastChangedAt:now, previousStock:prev.stock, delta:r2(ni.stock-prev.stock), orders:ni.orders, activity:prev.activity||[]};
           changed++;
         } else {
           unchanged++;
@@ -1165,7 +1201,23 @@ document.getElementById('importFile').addEventListener('change', async (e)=>{
       }));
     }
     await db.doc('meta/info').set({importedAt: now, source: file.name, categoryOrder: categoryOrder});
-    showImportStatus(`Imported on ${new Date(now).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})} — ${changed} changed, ${unchanged} unchanged.`, true);
+
+    // items that exist in the database but are not in this file any more
+    const stale = catalog.filter(c=>!newIds.has(c.id));
+    let removed = 0;
+    if(stale.length){
+      const sample = stale.slice(0,8).map(c=>`${c.sheet} · ${c.size}${c.detail?' · '+c.detail:''} · ${c.colour}`).join('\n');
+      if(window.confirm(`${stale.length} item(s) are in the database but not in this file:\n\n${sample}${stale.length>8?'\n…and '+(stale.length-8)+' more':''}\n\nRemove them? (Choose Cancel to keep them.)`)){
+        for(let i=0;i<stale.length;i+=25){
+          await Promise.all(stale.slice(i,i+25).map(c=>db.collection('stock').doc(c.id).delete()));
+        }
+        removed = stale.length;
+      }
+    }
+    const when = new Date(now).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    let msg = `Imported on ${when}: ${newItems.length} items in file — ${added} new, ${changed} changed, ${unchanged} unchanged` + (removed ? `, ${removed} removed.` : (stale.length ? `, ${stale.length} old item(s) kept.` : '.'));
+    if(parsedWb.warnings.length) msg += ' Note: ' + parsedWb.warnings.join('; ') + '.';
+    showImportStatus(msg, true);
   }catch(err){
     showImportStatus('Import failed: ' + err.message, false);
   }finally{
