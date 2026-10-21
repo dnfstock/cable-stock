@@ -243,6 +243,35 @@
   .ol-date.overdue b{color:var(--alarm);}
   .ol-tag{display:inline-block; font-size:10.5px; font-weight:600; padding:1px 7px; border-radius:2px; margin-left:6px; background:#e1efe6; color:var(--live); font-family:var(--sans);}
   .ol-tag.taken{background:#f7ded9; color:var(--alarm);}
+  .order-form{display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px;}
+  .order-form label{font-size:12px; color:var(--steel); font-weight:600; display:block; margin-bottom:4px;}
+  .order-form input, .ord-qty, .ord-del{font-family:var(--sans); font-size:14px; padding:9px 10px; border:1px solid var(--panel-line); border-radius:3px; width:100%; background:#fff;}
+  .ord-pick{margin:10px 0 4px; border:1px solid var(--panel-line); border-radius:4px; background:#fff; max-height:280px; overflow-y:auto;}
+  .ord-pick:empty{display:none;}
+  .pick-row{display:flex; align-items:center; gap:10px; padding:8px 12px; border-bottom:1px solid var(--panel-line); cursor:pointer;}
+  .pick-row:last-child{border-bottom:none;}
+  .pick-row:hover{background:#f7f8f6;}
+  .pick-row.added{background:#eef6f0;}
+  .pk-main{flex:1; min-width:0;}
+  .pk-stock{font-family:var(--mono); font-size:12.5px; color:var(--steel); white-space:nowrap;}
+  .pk-add{font-family:var(--display); font-weight:600; font-size:12.5px; color:var(--brand); min-width:48px; text-align:right;}
+  .ord-line{display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 0; border-bottom:1px solid var(--panel-line);}
+  .ord-line:last-child{border-bottom:none;}
+  .ord-line .ol-item{flex:1; min-width:180px;}
+  .ord-avail{font-size:12px; color:var(--steel); min-width:96px;}
+  .ord-avail b{font-family:var(--mono); color:var(--graphite);}
+  .ord-qty{width:100px;}
+  .ord-del{width:150px;}
+  .ord-rm{background:none; border:none; font-size:22px; line-height:1; color:#9aa39c; cursor:pointer; padding:0 6px;}
+  .ord-rm:hover{color:var(--alarm);}
+  .ord-warn{width:100%; font-size:11.5px; color:var(--hazard);}
+  .ord-actions{display:flex; align-items:center; gap:10px; justify-content:flex-end; margin-top:12px; flex-wrap:wrap;}
+  .ord-actions #ordSummary{margin-right:auto; font-size:12.5px; color:var(--steel); font-family:var(--mono);}
+  .import-btn.primary{background:var(--brand); color:#fff;}
+  .import-btn.primary:hover{background:var(--brand-dark);}
+  .om-cancel{background:none; border:1px solid var(--alarm); color:var(--alarm); font-size:11px; padding:2px 8px; border-radius:2px; cursor:pointer; margin-left:8px; font-family:var(--sans);}
+  .om-cancel:hover{background:var(--alarm); color:#fff;}
+  .app-tag{font-size:10px; background:#f2e6d0; color:var(--hazard); padding:1px 6px; border-radius:2px; margin-left:6px; font-family:var(--sans); font-weight:600;}
 </style>
 </head>
 <body>
@@ -340,6 +369,31 @@
     </div>
   </div>
 
+  <!-- ORDER (Admin only) -->
+  <div class="panel" id="panel-order">
+    <div class="reps-card">
+      <div class="rc-title">New order — reserve stock</div>
+      <div class="order-form">
+        <div><label for="ordCustomer">Customer name</label><input id="ordCustomer" type="text" placeholder="e.g. GENETECH"></div>
+        <div><label for="ordPo">PO number</label><input id="ordPo" type="text" placeholder="e.g. 26000732"></div>
+        <div><label for="ordPoDate">PO date</label><input id="ordPoDate" type="date"></div>
+        <div><label for="ordDelivery">Delivery date</label><input id="ordDelivery" type="date"></div>
+      </div>
+    </div>
+    <div class="reps-card">
+      <div class="rc-title">Cables on this PO</div>
+      <input id="ordSearch" class="search-big" type="search" placeholder="Search a cable to add, e.g. 2.5mm 4 core black" style="width:100%; font-family:var(--sans); border:1px solid var(--panel-line); border-radius:3px; background:#fff;">
+      <div class="ord-pick" id="ordPick"></div>
+      <div id="ordLines"></div>
+      <div class="ord-actions">
+        <span id="ordSummary">No cables added yet</span>
+        <button class="import-btn" id="ordClear">Clear</button>
+        <button class="import-btn primary" id="ordSubmit">Reserve stock</button>
+      </div>
+      <div class="import-status" id="ordStatus" style="margin-top:12px;"></div>
+    </div>
+  </div>
+
   <!-- SETTINGS (Admin only) -->
   <div class="panel" id="panel-settings">
     <div class="reps-card">
@@ -361,6 +415,7 @@
 <nav class="bottom-nav">
   <button class="nav-btn active" data-tab="stock"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>Stock</button>
   <button class="nav-btn" data-tab="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg>Search</button>
+  <button class="nav-btn" data-tab="order" id="orderNavBtn" style="display:none;"><svg viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/></svg>Order</button>
   <button class="nav-btn" data-tab="settings" id="settingsNavBtn" style="display:none;"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Settings</button>
 </nav>
 
@@ -446,7 +501,7 @@ const SEED_CATEGORY_ORDER = ["PHASE", "DNF", "CU-XP", "CU-XSP", "CU-PSP", "CU-PP
 let categoryOrder = SEED_CATEGORY_ORDER.slice();
 const subscribedCats = new Set();
 const LOW_COIL_THRESHOLD = 20;
-const TXN_LOG_MAX = 200;
+const TXN_LOG_MAX = 400;
 
 let db = null;
 let liveMode = false;
@@ -620,6 +675,7 @@ async function initDb(){
       currentUser = u;
       try{ canAdmin = (await db.collection('admins').doc(u.uid).get()).exists; }catch(e){ canAdmin = false; }
       document.getElementById('settingsNavBtn').style.display = canAdmin ? '' : 'none';
+      document.getElementById('orderNavBtn').style.display = canAdmin ? '' : 'none';
       document.getElementById('loginScreen').classList.remove('show');
       document.getElementById('signedInTag').style.display = 'flex';
       document.getElementById('signedInEmail').textContent = u.email + (canAdmin ? ' (Admin)' : '');
@@ -774,6 +830,7 @@ function render(){
   }
   renderSearch();
   renderOrderSearch();
+  if(typeof updateOrderLive === 'function'){ renderOrderPick(); updateOrderLive(); }
 }
 
 function renderSearch(){
@@ -830,13 +887,14 @@ function openOrderModal(id){
   let html = '';
   if(orders.length){
     html += `<div class="order-cols" style="display:flex;"><span>Customer</span><span>PO number</span><span>Qty</span><span>Delivery</span></div>`;
-    html += orders.map(o=>{
+    html += orders.map((o, idx)=>{
       const overdue = isOverdue(o.deliveryDate);
+      const cancelBtn = (canAdmin && o.source === 'app') ? `<button class="om-cancel" data-item="${escapeHtml(item.id)}" data-idx="${idx}">Cancel</button>` : '';
       return `<div class="order-row">
-        <div class="or-customer">${escapeHtml(o.customer)}</div>
+        <div class="or-customer">${escapeHtml(o.customer)}${o.source==='app'?'<span class="app-tag">entered in app</span>':''}</div>
         <div class="or-po">${escapeHtml(o.po||'—')}</div>
         <div class="or-qty">${o.qty!=null?o.qty:'—'}</div>
-        <div class="or-date ${overdue?'overdue':''}">${fmtDate(o.deliveryDate)}</div>
+        <div class="or-date ${overdue?'overdue':''}">${fmtDate(o.deliveryDate)}${cancelBtn}</div>
       </div>`;
     }).join('');
   }
@@ -1033,10 +1091,7 @@ document.getElementById('adjConfirmBtn').addEventListener('click', async ()=>{
   btn.disabled = true;
   let stockWriteOk = false;
   try{
-    await db.collection('stock').doc(item.id).set({
-      sheet:item.sheet, size:item.size, detail:item.detail, colour:item.colour, unit:item.unit,
-      stock:newStock, lastChangedAt:now, previousStock:item.stock, delta:amount, orders:item.orders||[], activity
-    });
+    await db.collection('stock').doc(item.id).set(docBody(item, {stock:newStock, lastChangedAt:now, previousStock:item.stock, delta:amount, activity}));
     stockWriteOk = true;
     await appendTxn({
       ts: now, sheet:item.sheet, size:item.size, detail:item.detail, colour:item.colour,
@@ -1124,13 +1179,21 @@ document.getElementById('niConfirmBtn').addEventListener('click', async ()=>{
   }
 });
 
-async function appendTxn(entry){
+function docBody(item, o){
+  const b = {sheet:item.sheet, size:item.size, detail:item.detail, colour:item.colour, unit:item.unit,
+    stock:item.stock, lastChangedAt:item.lastChangedAt ?? null, previousStock:item.previousStock ?? null, delta:item.delta ?? null,
+    orders:item.orders || [], activity:item.activity || []};
+  if(typeof item.seq === 'number') b.seq = item.seq;
+  return Object.assign(b, o || {});
+}
+async function appendTxns(entries){
   const snap = await db.doc('meta/transactions').get();
   const log = (snap.exists && snap.data().log) || [];
-  log.unshift(entry);
+  log.unshift(...entries);
   if(log.length > TXN_LOG_MAX) log.length = TXN_LOG_MAX;
   await db.doc('meta/transactions').set({log});
 }
+async function appendTxn(entry){ return appendTxns([entry]); }
 
 let txnExpanded = false;
 let txnLoadError = '';
@@ -1142,7 +1205,7 @@ function txnRowsHtml(list, showActor, seenAt){
   return list.map(t=>{
     const dir = t.delta > 0 ? 'up' : 'down';
     const arrow = t.delta > 0 ? '+' : '';
-    const detailTxt = t.delta > 0 ? 'Stock in' : `Taken by ${escapeHtml(t.customer||'—')} · PO ${escapeHtml(t.po||'—')}`;
+    const detailTxt = t.kind === 'reserve' ? `Reserved for ${escapeHtml(t.customer||'—')} · PO ${escapeHtml(t.po||'—')}` : t.kind === 'cancel' ? `Reservation cancelled · ${escapeHtml(t.customer||'—')} · PO ${escapeHtml(t.po||'—')}` : t.delta > 0 ? 'Stock in' : `Taken by ${escapeHtml(t.customer||'—')} · PO ${escapeHtml(t.po||'—')}`;
     const fresh = seenAt && t.ts > seenAt;
     return `<div class="txn-row ${dir} ${fresh?'fresh':''}">
       <span class="txn-delta ${dir}">${arrow}${r2(t.delta)}</span>
@@ -1189,6 +1252,167 @@ document.getElementById('markReadBtn').addEventListener('click', ()=>{
 });
 document.getElementById('txnMoreBtn').addEventListener('click', ()=>{ txnExpanded = !txnExpanded; renderTxnLog(); });
 
+/* ---------- Order tab: reserve stock for one PO with many cables ---------- */
+let ordLines = [];   // {id, qty, delivery}
+function todayStr(){ const d = new Date(), p = n=>String(n).padStart(2,'0'); return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate()); }
+function isoDay(s){ return s ? s + 'T00:00:00.000Z' : null; }
+function itemById(id){ return catalog.find(c=>c.id === id); }
+
+function renderOrderPick(){
+  const el = document.getElementById('ordPick');
+  const term = document.getElementById('ordSearch').value.trim();
+  if(!term){ el.innerHTML = ''; return; }
+  const all = filterResults({term, cat:'', unit:'', watchOnly:false});
+  const added = new Set(ordLines.map(l=>l.id));
+  el.innerHTML = all.length
+    ? all.slice(0, 15).map(it=>`<div class="pick-row ${added.has(it.id)?'added':''}" data-id="${escapeHtml(it.id)}">
+        <div class="pk-main"><div class="ol-name">${escapeHtml(it.colour)}</div><div class="ol-sub">${escapeHtml(it.sheet)} · ${escapeHtml(it.size)}${it.detail?' · '+escapeHtml(it.detail):''}</div></div>
+        <div class="pk-stock">${escapeHtml(fmtStock(it))}</div>
+        <div class="pk-add">${added.has(it.id)?'Added':'+ Add'}</div></div>`).join('') + (all.length > 15 ? `<div class="empty" style="padding:8px;">Showing 15 of ${all.length} — type more to narrow down.</div>` : '')
+    : '<div class="empty" style="padding:12px;">No matching cable.</div>';
+}
+
+function lineWarn(l){
+  const it = itemById(l.id), q = parseFloat(l.qty);
+  if(!it) return 'This cable is no longer in the database.';
+  if(!isNaN(q) && q > it.stock) return 'Only ' + fmtStock(it) + ' available — ' + r2(q - Math.max(0, it.stock)) + ' ' + unitSuffix(it.unit) + ' will go on backorder.';
+  return '';
+}
+function updateOrderLive(){
+  ordLines.forEach(l=>{
+    const it = itemById(l.id);
+    const av = document.querySelector('.ord-avail b[data-id="' + CSS.escape(l.id) + '"]');
+    if(av && it) av.textContent = fmtStock(it);
+    const w = document.querySelector('.ord-warn[data-id="' + CSS.escape(l.id) + '"]');
+    if(w) w.textContent = lineWarn(l);
+  });
+  const n = ordLines.length, filled = ordLines.filter(l=>parseFloat(l.qty) > 0).length;
+  document.getElementById('ordSummary').textContent = n ? `${n} cable${n===1?'':'s'} · ${filled} with quantity` : 'No cables added yet';
+}
+function renderOrderLines(focusId){
+  const el = document.getElementById('ordLines');
+  el.innerHTML = ordLines.map(l=>{
+    const it = itemById(l.id);
+    if(!it) return '';
+    return `<div class="ord-line" data-id="${escapeHtml(l.id)}">
+      <div class="ol-item"><div class="ol-name">${escapeHtml(it.colour)}</div><div class="ol-sub">${escapeHtml(it.sheet)} · ${escapeHtml(it.size)}${it.detail?' · '+escapeHtml(it.detail):''}</div></div>
+      <div class="ord-avail">Available <b data-id="${escapeHtml(l.id)}">${escapeHtml(fmtStock(it))}</b></div>
+      <input class="ord-qty" type="number" min="0" step="any" placeholder="Qty (${unitSuffix(it.unit)})" value="${escapeHtml(l.qty)}" data-id="${escapeHtml(l.id)}">
+      <input class="ord-del" type="date" value="${escapeHtml(l.delivery)}" data-id="${escapeHtml(l.id)}" title="Delivery date for this line (blank = same as the PO delivery date)">
+      <button class="ord-rm" data-id="${escapeHtml(l.id)}" title="Remove">×</button>
+      <div class="ord-warn" data-id="${escapeHtml(l.id)}"></div>
+    </div>`;
+  }).join('');
+  updateOrderLive();
+  if(focusId){ const q = el.querySelector('.ord-qty[data-id="' + CSS.escape(focusId) + '"]'); if(q) q.focus(); }
+  renderOrderPick();
+}
+function addOrderLine(id){
+  if(ordLines.some(l=>l.id === id)){ renderOrderLines(id); return; }
+  ordLines.push({id, qty:'', delivery:''});
+  renderOrderLines(id);
+}
+document.getElementById('ordSearch').addEventListener('input', renderOrderPick);
+document.getElementById('ordPick').addEventListener('click', e=>{
+  const row = e.target.closest('.pick-row');
+  if(row) addOrderLine(row.dataset.id);
+});
+document.getElementById('ordLines').addEventListener('input', e=>{
+  const id = e.target.dataset.id; const l = ordLines.find(x=>x.id === id);
+  if(!l) return;
+  if(e.target.classList.contains('ord-qty')) l.qty = e.target.value;
+  if(e.target.classList.contains('ord-del')) l.delivery = e.target.value;
+  updateOrderLive();
+});
+document.getElementById('ordLines').addEventListener('click', e=>{
+  const rm = e.target.closest('.ord-rm');
+  if(rm){ ordLines = ordLines.filter(l=>l.id !== rm.dataset.id); renderOrderLines(); }
+});
+function resetOrderForm(keepHeader){
+  ordLines = [];
+  if(!keepHeader){
+    document.getElementById('ordCustomer').value = ''; document.getElementById('ordPo').value = '';
+    document.getElementById('ordDelivery').value = '';
+  }
+  document.getElementById('ordPoDate').value = todayStr();
+  document.getElementById('ordSearch').value = '';
+  renderOrderLines();
+}
+document.getElementById('ordClear').addEventListener('click', ()=>{ if(!ordLines.length || confirm('Clear this order form?')) resetOrderForm(false); });
+
+function showOrderStatus(msg, ok){
+  const el = document.getElementById('ordStatus');
+  el.textContent = msg; el.className = 'import-status show ' + (ok ? 'ok' : 'err');
+}
+document.getElementById('ordSubmit').addEventListener('click', async ()=>{
+  if(!requireAdminName()) return;
+  const customer = document.getElementById('ordCustomer').value.trim();
+  const po = document.getElementById('ordPo').value.trim();
+  const poDate = document.getElementById('ordPoDate').value || todayStr();
+  const headDel = document.getElementById('ordDelivery').value;
+  if(!customer){ alert('Enter the customer name.'); return; }
+  if(!po){ alert('Enter the PO number.'); return; }
+  if(!ordLines.length){ alert('Add at least one cable to the order.'); return; }
+  const bad = ordLines.filter(l=>!(parseFloat(l.qty) > 0)).map(l=>{ const it = itemById(l.id); return it ? it.colour + ' (' + it.size + ')' : l.id; });
+  if(bad.length){ alert('Enter a quantity greater than zero for:\n\n' + bad.slice(0,10).join('\n') + (bad.length > 10 ? '\n…' : '')); return; }
+  if(orderIndex().some(e=>e.kind === 'order' && e.po && e.po.toUpperCase() === po.toUpperCase() && e.customer.toUpperCase() === customer.toUpperCase())){
+    if(!confirm('PO ' + po + ' for ' + customer + ' already has reserved lines. Adding this will create a second entry for the same PO. Continue?')) return;
+  }
+  const over = ordLines.filter(l=>lineWarn(l));
+  if(over.length && !confirm(over.length + ' line(s) ask for more than the available stock and will go on backorder. Continue?')) return;
+
+  const btn = document.getElementById('ordSubmit');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  const actor = currentActor();
+  const now = new Date().toISOString();
+  const ok = [], failed = [];
+  try{
+    for(let i = 0; i < ordLines.length; i += 10){
+      const part = ordLines.slice(i, i + 10);
+      const results = await Promise.allSettled(part.map(async l=>{
+        const it = itemById(l.id); if(!it) throw new Error('item not found');
+        const qty = r2(parseFloat(l.qty));
+        const entry = {customer, po, poDate:isoDay(poDate), deliveryDate: isoDay(l.delivery || headDel) || 'TBA', qty, source:'app', by:actor, createdAt:now};
+        await db.collection('stock').doc(it.id).set(docBody(it, {stock:r2(it.stock - qty), lastChangedAt:now, previousStock:it.stock, delta:-qty, orders:[...(it.orders||[]), entry]}));
+        return {it, qty};
+      }));
+      results.forEach((r, k)=>{ if(r.status === 'fulfilled') ok.push(r.value); else failed.push(part[k]); });
+    }
+    if(ok.length){
+      try{
+        await appendTxns(ok.map(({it, qty})=>({ts:now, sheet:it.sheet, size:it.size, detail:it.detail, colour:it.colour, delta:-qty, customer, po, actor, kind:'reserve'})));
+      }catch(e){ console.warn('log not saved', e); }
+    }
+    if(failed.length){
+      showOrderStatus(ok.length + ' line(s) reserved, but ' + failed.length + ' failed and were NOT saved. Failed lines are still in the form — check them and press Reserve again for those only.', false);
+      ordLines = failed; renderOrderLines();
+    } else {
+      showOrderStatus('Reserved ' + ok.length + ' cable line' + (ok.length===1?'':'s') + ' for ' + customer + ' · PO ' + po + '. Stock is updated for everyone now.', true);
+      resetOrderForm(false);
+    }
+  }catch(err){
+    showOrderStatus('Could not save the order: ' + (err && err.message ? err.message : err), false);
+  }finally{
+    btn.disabled = false; btn.textContent = 'Reserve stock';
+  }
+});
+
+document.getElementById('omList').addEventListener('click', async e=>{
+  const b = e.target.closest('.om-cancel');
+  if(!b || !requireAdminName()) return;
+  const item = itemById(b.dataset.item), idx = parseInt(b.dataset.idx, 10);
+  const o = item && (item.orders || [])[idx];
+  if(!o || o.source !== 'app') return;
+  if(!confirm('Cancel the reservation of ' + r2(o.qty) + ' ' + unitSuffix(item.unit) + ' for ' + o.customer + ' · PO ' + o.po + '? The quantity goes back to stock.')) return;
+  const now = new Date().toISOString();
+  try{
+    await db.collection('stock').doc(item.id).set(docBody(item, {stock:r2(item.stock + o.qty), lastChangedAt:now, previousStock:item.stock, delta:o.qty, orders:(item.orders||[]).filter((_, i)=>i !== idx)}));
+    try{ await appendTxns([{ts:now, sheet:item.sheet, size:item.size, detail:item.detail, colour:item.colour, delta:o.qty, customer:o.customer, po:o.po, actor:currentActor(), kind:'cancel'}]); }catch(e2){ console.warn(e2); }
+    document.getElementById('orderModal').classList.remove('active');
+  }catch(err){ alert('Could not cancel: ' + (err && err.message ? err.message : err)); }
+});
+document.getElementById('ordPoDate').value = todayStr();
+
 /* ---------- bottom tabs ---------- */
 function showTab(name){
   document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active', p.id === 'panel-'+name));
@@ -1226,6 +1450,17 @@ function toIsoMaybe(v){
   if(v instanceof Date) return v.toISOString();
   if(typeof v === 'string' && v.trim()){ const p = parseTextDate(v); return p || v.trim(); }
   return null;
+}
+
+function samePo(a, b){
+  const pa = (a.po||'').trim().toUpperCase(), pb = (b.po||'').trim().toUpperCase();
+  if(pa && pb) return pa === pb;
+  return (a.customer||'').trim().toUpperCase() === (b.customer||'').trim().toUpperCase();
+}
+function mergeAppOrders(prev, ni){
+  const keep = ((prev && prev.orders) || []).filter(o=>o.source === 'app' && !(ni.orders || []).some(x=>samePo(x, o)));
+  const qty = keep.reduce((s,o)=>s + (typeof o.qty === 'number' ? o.qty : 0), 0);
+  return {orders:[...(ni.orders || []), ...keep], stock:r2(ni.stock - qty), kept:keep.length};
 }
 
 /* ---- balance-sheet reader ----
@@ -1354,7 +1589,7 @@ document.getElementById('importFile').addEventListener('change', async (e)=>{
 
     const now = new Date().toISOString();
     const prevById = new Map(catalog.map(c=>[c.id, c]));
-    let added = 0, changed = 0, unchanged = 0;
+    let added = 0, changed = 0, unchanged = 0, keptApp = 0;
     const newIds = new Set();
     const chunks = [];
     for(let i=0;i<newItems.length;i+=25) chunks.push(newItems.slice(i,i+25));
@@ -1367,15 +1602,19 @@ document.getElementById('importFile').addEventListener('change', async (e)=>{
         if(!prev){
           body = {sheet:ni.sheet, size:ni.size, detail:ni.detail, colour:ni.colour, unit:ni.unit, stock:ni.stock, lastChangedAt:now, previousStock:null, delta:null, orders:ni.orders, activity:[], seq:ni.seq};
           added++;
-        } else if(prev.stock !== ni.stock || JSON.stringify(prev.orders)!==JSON.stringify(ni.orders)){
-          body = {sheet:ni.sheet, size:ni.size, detail:ni.detail, colour:ni.colour, unit:ni.unit, stock:ni.stock, lastChangedAt:now, previousStock:prev.stock, delta:r2(ni.stock-prev.stock), orders:ni.orders, activity:prev.activity||[], seq:ni.seq};
-          changed++;
-        } else if(prev.seq !== ni.seq){
-          body = {sheet:ni.sheet, size:ni.size, detail:ni.detail, colour:ni.colour, unit:ni.unit, stock:prev.stock, lastChangedAt:prev.lastChangedAt ?? null, previousStock:prev.previousStock ?? null, delta:prev.delta ?? null, orders:prev.orders||[], activity:prev.activity||[], seq:ni.seq};
-          unchanged++;
         } else {
-          unchanged++;
-          return Promise.resolve();
+          const m = mergeAppOrders(prev, ni);
+          keptApp += m.kept;
+          if(prev.stock !== m.stock || JSON.stringify(prev.orders) !== JSON.stringify(m.orders)){
+            body = {sheet:ni.sheet, size:ni.size, detail:ni.detail, colour:ni.colour, unit:ni.unit, stock:m.stock, lastChangedAt:now, previousStock:prev.stock, delta:r2(m.stock-prev.stock), orders:m.orders, activity:prev.activity||[], seq:ni.seq};
+            changed++;
+          } else if(prev.seq !== ni.seq){
+            body = {sheet:ni.sheet, size:ni.size, detail:ni.detail, colour:ni.colour, unit:ni.unit, stock:prev.stock, lastChangedAt:prev.lastChangedAt ?? null, previousStock:prev.previousStock ?? null, delta:prev.delta ?? null, orders:prev.orders||[], activity:prev.activity||[], seq:ni.seq};
+            unchanged++;
+          } else {
+            unchanged++;
+            return Promise.resolve();
+          }
         }
         return db.collection('stock').doc(id).set(body);
       }));
@@ -1396,6 +1635,7 @@ document.getElementById('importFile').addEventListener('change', async (e)=>{
     }
     const when = new Date(now).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
     let msg = `Imported on ${when}: ${newItems.length} items in file — ${added} new, ${changed} changed, ${unchanged} unchanged` + (removed ? `, ${removed} removed.` : (stale.length ? `, ${stale.length} old item(s) kept.` : '.'));
+    if(keptApp) msg += ' ' + keptApp + ' order line(s) entered in the app are not in the Excel yet, so they were kept and are still deducted from stock.';
     if(parsedWb.warnings.length) msg += ' Note: ' + parsedWb.warnings.join('; ') + '.';
     showImportStatus(msg, true);
   }catch(err){
