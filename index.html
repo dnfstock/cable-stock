@@ -570,6 +570,8 @@ function subscribeTxnLog(){
     renderTxnLog();
   }, err=>{
     console.error('txn log subscribe error', err);
+    txnLoadError = (err && (err.code || err.message)) || 'unknown error';
+    renderTxnLog();
   });
 }
 
@@ -1131,6 +1133,7 @@ async function appendTxn(entry){
 }
 
 let txnExpanded = false;
+let txnLoadError = '';
 function txnSeenAt(){
   try{ const v = localStorage.getItem('dnf-txn-seen'); if(v) return v; }catch(e){}
   return new Date(Date.now() - 24*60*60*1000).toISOString();
@@ -1157,8 +1160,17 @@ function renderTxnLog(){
   // Sales: alert card on the Stock tab
   const card = document.getElementById('recentCard');
   if(!card) return;
-  if(canAdmin || !txnLog.length){ card.style.display = 'none'; return; }
+  if(canAdmin){ card.style.display = 'none'; return; }
   card.style.display = '';
+  if(!txnLog.length){
+    document.getElementById('newTag').style.display = 'none';
+    document.getElementById('markReadBtn').style.display = 'none';
+    document.getElementById('txnMoreBtn').style.display = 'none';
+    document.getElementById('txnLogSales').innerHTML = txnLoadError
+      ? '<div class="empty" style="color:var(--alarm); padding:14px 0;">Cannot load recent adjustments (' + escapeHtml(txnLoadError) + '). Please tell Admin to publish the latest Firestore rules.</div>'
+      : '<div class="empty" style="padding:14px 0;">No stock adjustments yet. They will appear here as soon as Admin records one.</div>';
+    return;
+  }
   const seenAt = txnSeenAt();
   const newCount = txnLog.filter(t=>t.ts > seenAt).length;
   const tag = document.getElementById('newTag');
