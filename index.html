@@ -553,7 +553,23 @@ async function startApp(){
   subscribeTxnLog();
 }
 
+function showSetupProblem(msg){
+  setLive(false);
+  document.getElementById('liveLabel').textContent = 'Setup problem';
+  const html = '<div class="empty" style="color:var(--alarm); line-height:1.6;">' + msg + '</div>';
+  document.getElementById('rows').innerHTML = html;
+  document.getElementById('summary').textContent = '';
+}
+
 async function initDb(){
+  if(typeof firebaseConfig === 'undefined'){
+    showSetupProblem('The file <b>config.js</b> did not load. Check that it is uploaded to the same GitHub folder as index.html, and that its contents are exactly the config block with no missing quotes or commas.');
+    return;
+  }
+  if(!firebaseConfig.apiKey || /PASTE|YOUR_/.test(firebaseConfig.apiKey + firebaseConfig.projectId)){
+    showSetupProblem('<b>config.js</b> still has the PASTE_… placeholder text. Open it and paste your real Firebase values.');
+    return;
+  }
   firebase.initializeApp(firebaseConfig);
   db = firebase.firestore();
   const auth = firebase.auth();
@@ -1228,7 +1244,7 @@ document.getElementById('importFile').addEventListener('change', async (e)=>{
 
 /* ---------- boot ---------- */
 loadWatchlist();
-initDb();
+initDb().catch(e=>showSetupProblem('Could not start: ' + (e && e.message ? e.message : e)));
 </script>
 </body>
 </html>
