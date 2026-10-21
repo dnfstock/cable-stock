@@ -377,7 +377,7 @@
         <div><label for="ordCustomer">Customer name</label><input id="ordCustomer" type="text" placeholder="e.g. GENETECH"></div>
         <div><label for="ordPo">PO number</label><input id="ordPo" type="text" placeholder="e.g. 26000732"></div>
         <div><label for="ordPoDate">PO date</label><input id="ordPoDate" type="date"></div>
-        <div><label for="ordDelivery">Delivery date</label><input id="ordDelivery" type="date"></div>
+        <div><label for="ordDelivery">Delivery date (all cables)</label><input id="ordDelivery" type="date"></div>
       </div>
     </div>
     <div class="reps-card">
@@ -1298,7 +1298,7 @@ function renderOrderLines(focusId){
       <div class="ol-item"><div class="ol-name">${escapeHtml(it.colour)}</div><div class="ol-sub">${escapeHtml(it.sheet)} · ${escapeHtml(it.size)}${it.detail?' · '+escapeHtml(it.detail):''}</div></div>
       <div class="ord-avail">Available <b data-id="${escapeHtml(l.id)}">${escapeHtml(fmtStock(it))}</b></div>
       <input class="ord-qty" type="number" min="0" step="any" placeholder="Qty (${unitSuffix(it.unit)})" value="${escapeHtml(l.qty)}" data-id="${escapeHtml(l.id)}">
-      <input class="ord-del" type="date" value="${escapeHtml(l.delivery)}" data-id="${escapeHtml(l.id)}" title="Delivery date for this line (blank = same as the PO delivery date)">
+      ${(l.delivery || l.showDate) ? `<input class="ord-del" type="date" value="${escapeHtml(l.delivery)}" data-id="${escapeHtml(l.id)}" title="Delivery date for this line only">` : `<button class="link-btn ord-datelink" data-id="${escapeHtml(l.id)}">Different delivery date</button>`}
       <button class="ord-rm" data-id="${escapeHtml(l.id)}" title="Remove">×</button>
       <div class="ord-warn" data-id="${escapeHtml(l.id)}"></div>
     </div>`;
@@ -1325,6 +1325,8 @@ document.getElementById('ordLines').addEventListener('input', e=>{
   updateOrderLive();
 });
 document.getElementById('ordLines').addEventListener('click', e=>{
+  const dl = e.target.closest('.ord-datelink');
+  if(dl){ const l = ordLines.find(x=>x.id === dl.dataset.id); if(l){ l.showDate = true; renderOrderLines(); const inp = document.querySelector('.ord-del[data-id="' + CSS.escape(l.id) + '"]'); if(inp) inp.focus(); } return; }
   const rm = e.target.closest('.ord-rm');
   if(rm){ ordLines = ordLines.filter(l=>l.id !== rm.dataset.id); renderOrderLines(); }
 });
