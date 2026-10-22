@@ -284,6 +284,8 @@
   .new-badge{font-size:10px; background:#e1efe6; color:var(--live); padding:1px 6px; border-radius:2px; margin-left:6px; font-family:var(--sans); font-weight:600;}
   .ord-split{background:none; border:1px solid var(--panel-line); color:var(--steel); font-size:11.5px; padding:4px 8px; border-radius:3px; cursor:pointer; font-family:var(--sans);}
   .ord-split:hover{border-color:var(--brand); color:var(--brand);}
+  .chip.sel{border-color:var(--brand); background:#fbf3f1; color:var(--brand);}
+  .pick-row.pk-new .ol-name{color:var(--brand);}
 </style>
 </head>
 <body>
@@ -457,27 +459,40 @@
 </div>
 
 <div class="modal-bg" id="customModal">
-  <div class="adjust-modal">
-    <h3>New stock code line</h3>
-    <div class="am-meta">For a cable that is not in the system yet. It is created with zero stock, so the reserved quantity shows as backorder until stock is received.</div>
-    <label for="cuCode">Stock code</label>
-    <input id="cuCode" list="cuCodes" type="text" placeholder="e.g. CU-XSP">
-    <datalist id="cuCodes"></datalist>
-    <label for="cuSize">Size</label>
-    <input id="cuSize" type="text" placeholder="e.g. 25mm">
-    <label for="cuDetail">Spec (optional)</label>
-    <input id="cuDetail" type="text" placeholder="e.g. 3 core">
-    <label for="cuColour">Colour / description</label>
-    <input id="cuColour" type="text" placeholder="e.g. Black mtr">
-    <label for="cuUnit">Unit</label>
-    <select id="cuUnit" class="ord-select" style="margin-bottom:14px;">
-      <option value="meter">Meter</option>
-      <option value="coil">Coil</option>
-      <option value="kg">Kg</option>
-    </select>
+  <div class="adjust-modal" style="width:440px; max-height:90vh; overflow-y:auto;">
+    <h3>Add a cable that is not listed</h3>
+    <div class="am-meta">Pick the size first so the cable joins the size that already exists. It is created with zero stock, so the reserved quantity shows as backorder until stock is received.</div>
+
+    <div id="cuStep1">
+      <label for="cuSizeSearch">1. Size</label>
+      <input id="cuSizeSearch" type="search" placeholder="Type a size, e.g. 25mm 3c" style="margin-bottom:8px;">
+      <div class="ord-pick" id="cuSizeList" style="max-height:210px; margin-top:0;"></div>
+    </div>
+
+    <div id="cuStep2" style="display:none;">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+        <span class="chip sel" id="cuSizeChosen" style="cursor:default;">—</span>
+        <button class="link-btn" id="cuChangeSize">Change size</button>
+      </div>
+      <label>2. Stock code</label>
+      <div class="chips" id="cuCodeList" style="margin-bottom:8px;"></div>
+      <label for="cuCode">…or add another stock code (for example a new code for this order)</label>
+      <input id="cuCode" list="cuCodes" type="text" placeholder="e.g. CU-XSP, or type a new code">
+      <datalist id="cuCodes"></datalist>
+      <label for="cuColour">3. Colour / description</label>
+      <input id="cuColour" type="text" placeholder="e.g. Black mtr">
+      <div class="am-hint" id="cuExisting" style="margin:-6px 0 12px;"></div>
+      <label for="cuUnit">Unit</label>
+      <select id="cuUnit" class="ord-select" style="margin-bottom:14px;">
+        <option value="meter">Meter</option>
+        <option value="coil">Coil</option>
+        <option value="kg">Kg</option>
+      </select>
+    </div>
+
     <div class="adjust-actions">
       <button class="mini-btn" id="cuCancel">Cancel</button>
-      <button class="mini-btn ok" id="cuAdd">Add line</button>
+      <button class="mini-btn ok" id="cuAdd" disabled>Add line</button>
     </div>
   </div>
 </div>
@@ -807,6 +822,9 @@ function matchesTerm(c, term){
   const hay = (c.sheet + ' ' + c.size + ' ' + c.detail + ' ' + c.colour + ' ' + c.unit).toLowerCase();
   return searchTokens(term).every(t => tokenHits(hay, t));
 }
+/* tidy a typed size / spec so it matches how the Excel writes them: "25 mm" -> 25mm, "3c" -> 3 core */
+function normalizeSize(s){ let v = String(s||'').trim().replace(/\s+/g, '').toLowerCase().replace(/mm2$/, 'mm'); if(/^[\d.]+$/.test(v)) v += 'mm'; return v; }
+function normalizeSpec(s){ return String(s||'').trim().replace(/(\d+)\s*(?:cores?|c)\b/gi, '$1 core').replace(/\s+/g, ' '); }
 const natCmp = (x, y) => String(x).localeCompare(String(y), undefined, {numeric:true});
 function filterResults({term, cat, unit, watchOnly}){
   let results = catalog;
@@ -1416,6 +1434,7 @@ function renderOrderPick(){
             <div class="pk-add">${n ? 'Added ×' + n : '+ Add'}</div></div>`;
         }).join('')).join('');
     }
+    if(open) body += `<div class="pick-row pk-new" data-size="${escapeHtml(g.size)}" data-detail="${escapeHtml(g.detail)}"><div class="pk-main"><div class="ol-name">+ New stock code or colour for this size</div></div></div>`;
     return `<div class="sz-group"><div class="sz-head" data-key="${escapeHtml(g.key)}">
       <span class="sz-size">${escapeHtml(g.size)}${g.detail ? ' · ' + escapeHtml(g.detail) : ''}</span>
       <span class="sz-codes">${escapeHtml(codes.join(' · '))}</span>
@@ -1472,7 +1491,9 @@ document.getElementById('ordPick').addEventListener('click', e=>{
   const head = e.target.closest('.sz-head');
   if(head){ const k = head.dataset.key; if(pickOpen.has(k)) pickOpen.delete(k); else pickOpen.add(k); renderOrderPick(); return; }
   const row = e.target.closest('.pick-row');
-  if(row) addOrderLine(row.dataset.id);
+  if(!row) return;
+  if(row.classList.contains('pk-new')){ openCustomLine({size:row.dataset.size, detail:row.dataset.detail}); return; }
+  addOrderLine(row.dataset.id);
 });
 document.getElementById('ordLines').addEventListener('input', e=>{
   const l = lineByUid(e.target.dataset.uid);
@@ -1506,29 +1527,114 @@ document.getElementById('ordDelSelect').addEventListener('change', e=>{
 });
 document.getElementById('ordDelivery').addEventListener('input', renderOrderLines);
 
-/* a cable that is not in the system yet */
-function openCustomLine(){
-  document.getElementById('cuCodes').innerHTML = categoryOrder.map(c=>`<option value="${escapeHtml(c)}">`).join('');
-  ['cuCode','cuSize','cuDetail','cuColour'].forEach(id=>document.getElementById(id).value = '');
-  document.getElementById('cuUnit').value = 'meter';
-  document.getElementById('customModal').classList.add('active');
-  document.getElementById('cuCode').focus();
+/* a cable that is not in the system yet: choose the size that already exists, then the stock code */
+let cuPick = null;   // {size, detail}
+function allSizeGroups(){
+  const m = new Map();
+  catalog.forEach(it=>{
+    const k = it.size + '|' + it.detail;
+    if(!m.has(k)) m.set(k, {key:k, size:it.size, detail:it.detail, codes:new Map()});
+    const g = m.get(k); g.codes.set(it.sheet, (g.codes.get(it.sheet) || 0) + 1);
+  });
+  return [...m.values()].sort((a,b)=>natCmp(a.size, b.size) || natCmp(a.detail, b.detail));
 }
-document.getElementById('ordCustomBtn').addEventListener('click', openCustomLine);
+function guessNewSize(term){
+  const toks = String(term).trim().split(/\s+/).filter(Boolean);
+  const k = toks.findIndex(t=>/^[\d.]+(mm2?)?$/i.test(t));
+  const size = normalizeSize(k >= 0 ? toks[k] : (toks[0] || ''));
+  const rest = toks.filter((_, i)=>i !== (k >= 0 ? k : 0)).join(' ');
+  return {size, detail: normalizeSpec(rest)};
+}
+function renderCuSizeList(){
+  const el = document.getElementById('cuSizeList');
+  const term = document.getElementById('cuSizeSearch').value.trim();
+  if(!term){ el.innerHTML = '<div class="empty" style="padding:12px;">Type a size to search the sizes that already exist.</div>'; return; }
+  const groups = allSizeGroups().filter(g=>matchesTerm({sheet:'', size:g.size, detail:g.detail, colour:'', unit:''}, term)).slice(0, 15);
+  const guess = guessNewSize(term);
+  const exact = groups.some(g=>g.size === guess.size && g.detail === guess.detail);
+  el.innerHTML = groups.map(g=>`<div class="pick-row" data-size="${escapeHtml(g.size)}" data-detail="${escapeHtml(g.detail)}">
+      <div class="pk-main"><div class="ol-name">${escapeHtml(g.size)}${g.detail ? ' · ' + escapeHtml(g.detail) : ''}</div><div class="ol-sub">${escapeHtml([...g.codes.keys()].join(' · '))}</div></div>
+      <div class="pk-add">Choose</div></div>`).join('')
+    + ((!exact && guess.size) ? `<div class="pick-row" data-size="${escapeHtml(guess.size)}" data-detail="${escapeHtml(guess.detail)}" data-new="1">
+      <div class="pk-main"><div class="ol-name" style="color:var(--brand);">+ Not in the list — use as a new size: ${escapeHtml(guess.size)}${guess.detail ? ' · ' + escapeHtml(guess.detail) : ''}</div></div></div>` : '');
+}
+function cuExistingFor(code){
+  if(!cuPick || !code) return [];
+  return catalog.filter(it=>it.sheet === code && it.size === cuPick.size && it.detail === cuPick.detail);
+}
+function refreshCuStep2(){
+  const code = document.getElementById('cuCode').value.trim().toUpperCase();
+  document.querySelectorAll('#cuCodeList .chip').forEach(c=>c.classList.toggle('sel', c.dataset.code === code));
+  const ex = cuExistingFor(code);
+  document.getElementById('cuExisting').textContent = !code ? '' : ex.length
+    ? 'Already listed under ' + code + ': ' + ex.map(i=>i.colour).join(', ') + '. Use the main list above to add those.'
+    : (categoryOrder.includes(code) ? 'No cable of this size under ' + code + ' yet.' : 'New stock code — it will be added to the category list.');
+  if(ex.length) document.getElementById('cuUnit').value = ex[0].unit;
+  document.getElementById('cuAdd').disabled = !(cuPick && code && document.getElementById('cuColour').value.trim());
+}
+function chooseCuSize(size, detail){
+  cuPick = {size, detail};
+  document.getElementById('cuStep1').style.display = 'none';
+  document.getElementById('cuStep2').style.display = '';
+  document.getElementById('cuSizeChosen').textContent = size + (detail ? ' · ' + detail : '');
+  const g = allSizeGroups().find(x=>x.size === size && x.detail === detail);
+  const codes = g ? [...g.codes.entries()] : [];
+  document.getElementById('cuCodeList').innerHTML = codes.length
+    ? codes.map(([c, n])=>`<button class="chip" data-code="${escapeHtml(c)}">${escapeHtml(c)}<span>${n}</span></button>`).join('')
+    : '<span class="am-hint" style="margin:0;">No stock code has this size yet — type one below.</span>';
+  document.getElementById('cuCode').value = codes.length === 1 ? codes[0][0] : '';
+  document.getElementById('cuColour').value = '';
+  document.getElementById('cuUnit').value = 'meter';
+  document.getElementById('cuCodes').innerHTML = categoryOrder.map(c=>`<option value="${escapeHtml(c)}">`).join('');
+  refreshCuStep2();
+  document.getElementById(codes.length === 1 ? 'cuColour' : 'cuCode').focus();
+}
+function openCustomLine(pre){
+  cuPick = null;
+  document.getElementById('cuSizeSearch').value = '';
+  document.getElementById('cuStep1').style.display = '';
+  document.getElementById('cuStep2').style.display = 'none';
+  document.getElementById('cuAdd').disabled = true;
+  renderCuSizeList();
+  document.getElementById('customModal').classList.add('active');
+  if(pre && pre.size) chooseCuSize(pre.size, pre.detail || '');
+  else document.getElementById('cuSizeSearch').focus();
+}
+document.getElementById('ordCustomBtn').addEventListener('click', ()=>openCustomLine());
+document.getElementById('cuSizeSearch').addEventListener('input', renderCuSizeList);
+document.getElementById('cuSizeList').addEventListener('click', e=>{
+  const row = e.target.closest('.pick-row');
+  if(row) chooseCuSize(row.dataset.size, row.dataset.detail);
+});
+document.getElementById('cuChangeSize').addEventListener('click', ()=>{
+  cuPick = null;
+  document.getElementById('cuStep1').style.display = '';
+  document.getElementById('cuStep2').style.display = 'none';
+  document.getElementById('cuAdd').disabled = true;
+  document.getElementById('cuSizeSearch').focus();
+});
+document.getElementById('cuCodeList').addEventListener('click', e=>{
+  const c = e.target.closest('.chip');
+  if(!c) return;
+  document.getElementById('cuCode').value = c.dataset.code;
+  refreshCuStep2();
+  document.getElementById('cuColour').focus();
+});
+document.getElementById('cuCode').addEventListener('input', refreshCuStep2);
+document.getElementById('cuColour').addEventListener('input', refreshCuStep2);
 document.getElementById('cuCancel').addEventListener('click', ()=>document.getElementById('customModal').classList.remove('active'));
 document.getElementById('customModal').addEventListener('click', e=>{ if(e.target.id === 'customModal') e.currentTarget.classList.remove('active'); });
 document.getElementById('cuAdd').addEventListener('click', ()=>{
+  if(!cuPick) return;
   const sheet = document.getElementById('cuCode').value.trim().toUpperCase();
-  let size = document.getElementById('cuSize').value.trim().replace(/\s+/g, '');
-  const detail = document.getElementById('cuDetail').value.trim();
   const colour = document.getElementById('cuColour').value.trim();
   const unit = document.getElementById('cuUnit').value;
-  if(!sheet || !size || !colour){ alert('Enter the stock code, size and colour / description.'); return; }
-  if(/^[\d.]+$/.test(size)) size += 'mm';
-  const c = {sheet, size, detail, colour, unit};
+  if(!sheet || !colour){ alert('Choose or type the stock code and the colour / description.'); return; }
+  const c = {sheet, size:cuPick.size, detail:cuPick.detail, colour, unit};
   document.getElementById('customModal').classList.remove('active');
-  const existing = itemById(itemDocId(c));
-  if(existing){ addOrderLine(existing.id); showOrderStatus('That cable already exists in the system, so the existing one was added.', true); return; }
+  // the same cable, even if spelled with different capitals or spaces, is the existing one
+  const same = catalog.find(it=>it.sheet === c.sheet && it.size === c.size && it.detail === c.detail && it.unit === c.unit && it.colour.trim().toLowerCase() === c.colour.toLowerCase());
+  if(same){ addOrderLine(same.id); showOrderStatus('That cable already exists in the system, so the existing one was added.', true); return; }
   const l = {uid:ordUid++, id:null, custom:c, qty:'', mode:'', delivery:''};
   ordLines.push(l);
   renderOrderLines(l.uid);
