@@ -474,13 +474,13 @@
         <span class="chip sel" id="cuSizeChosen" style="cursor:default;">—</span>
         <button class="link-btn" id="cuChangeSize">Change size</button>
       </div>
-      <label>2. Stock code</label>
+      <label>2. Stock code (cable type)</label>
       <div class="chips" id="cuCodeList" style="margin-bottom:8px;"></div>
       <label for="cuCode">…or add another stock code (for example a new code for this order)</label>
       <input id="cuCode" list="cuCodes" type="text" placeholder="e.g. CU-XSP, or type a new code">
       <datalist id="cuCodes"></datalist>
-      <label for="cuColour">3. Colour / description</label>
-      <input id="cuColour" type="text" placeholder="e.g. Black mtr">
+      <label for="cuColour">3. Item name (e.g. TBA, Black mtr 3)</label>
+      <input id="cuColour" type="text" placeholder="e.g. TBA or Black mtr 3">
       <div class="am-hint" id="cuExisting" style="margin:-6px 0 12px;"></div>
       <label for="cuUnit">Unit</label>
       <select id="cuUnit" class="ord-select" style="margin-bottom:14px;">
@@ -826,6 +826,7 @@ function matchesTerm(c, term){
 function normalizeSize(s){ let v = String(s||'').trim().replace(/\s+/g, '').toLowerCase().replace(/mm2$/, 'mm'); if(/^[\d.]+$/.test(v)) v += 'mm'; return v; }
 function normalizeSpec(s){ return String(s||'').trim().replace(/(\d+)\s*(?:cores?|c)\b/gi, '$1 core').replace(/\s+/g, ' '); }
 const natCmp = (x, y) => String(x).localeCompare(String(y), undefined, {numeric:true});
+const sizeCmp = (a, b) => { const x = parseFloat(a), y = parseFloat(b); if(!isNaN(x) && !isNaN(y) && x !== y) return x - y; return natCmp(a, b); };
 function filterResults({term, cat, unit, watchOnly}){
   let results = catalog;
   if(watchOnly) results = results.filter(c=>watchlist.has(itemKey(c)));
@@ -833,18 +834,16 @@ function filterResults({term, cat, unit, watchOnly}){
   if(unit) results = results.filter(c=>c.unit===unit);
   if(term) results = results.filter(c=>matchesTerm(c, term));
   const seqOf = c => (typeof c.seq === 'number' ? c.seq : 1e9);   // items without a position go last in their category
-  return [...results].sort((a,b)=> catRank(a.sheet)-catRank(b.sheet) || (seqOf(a)-seqOf(b)) || natCmp(a.size,b.size) || natCmp(a.detail,b.detail) || natCmp(a.colour,b.colour));
+  // size first (1.5mm ... 630mm) so a new cable joins its size block; Excel position keeps the rows inside a block in file order
+  return [...results].sort((a,b)=> catRank(a.sheet)-catRank(b.sheet) || sizeCmp(a.size,b.size) || natCmp(a.detail,b.detail) || (seqOf(a)-seqOf(b)) || natCmp(a.colour,b.colour));
 }
 
 function groupBySizeSpec(items){
-  const groups = [];
+  const groups = [], index = new Map();
   items.forEach(item=>{
-    const last = groups[groups.length-1];
-    if(last && last.sheet===item.sheet && last.size===item.size && last.detail===item.detail){
-      last.items.push(item);
-    } else {
-      groups.push({sheet:item.sheet, size:item.size, detail:item.detail, items:[item]});
-    }
+    const k = item.sheet + '|' + item.size + '|' + item.detail;
+    if(!index.has(k)){ const g = {sheet:item.sheet, size:item.size, detail:item.detail, items:[]}; index.set(k, g); groups.push(g); }
+    index.get(k).items.push(item);
   });
   return groups;
 }
@@ -1408,7 +1407,7 @@ function groupForPicker(results){
     if(!g.sheets.has(it.sheet)) g.sheets.set(it.sheet, []);
     g.sheets.get(it.sheet).push(it);
   });
-  return [...groups.values()].sort((a,b)=>natCmp(a.size, b.size) || natCmp(a.detail, b.detail));
+  return [...groups.values()].sort((a,b)=>sizeCmp(a.size, b.size) || natCmp(a.detail, b.detail));
 }
 function renderOrderPick(){
   const el = document.getElementById('ordPick');
@@ -1536,7 +1535,7 @@ function allSizeGroups(){
     if(!m.has(k)) m.set(k, {key:k, size:it.size, detail:it.detail, codes:new Map()});
     const g = m.get(k); g.codes.set(it.sheet, (g.codes.get(it.sheet) || 0) + 1);
   });
-  return [...m.values()].sort((a,b)=>natCmp(a.size, b.size) || natCmp(a.detail, b.detail));
+  return [...m.values()].sort((a,b)=>sizeCmp(a.size, b.size) || natCmp(a.detail, b.detail));
 }
 function guessNewSize(term){
   const toks = String(term).trim().split(/\s+/).filter(Boolean);
