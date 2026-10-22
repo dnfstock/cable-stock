@@ -272,6 +272,18 @@
   .om-cancel{background:none; border:1px solid var(--alarm); color:var(--alarm); font-size:11px; padding:2px 8px; border-radius:2px; cursor:pointer; margin-left:8px; font-family:var(--sans);}
   .om-cancel:hover{background:var(--alarm); color:#fff;}
   .app-tag{font-size:10px; background:#f2e6d0; color:var(--hazard); padding:1px 6px; border-radius:2px; margin-left:6px; font-family:var(--sans); font-weight:600;}
+  .ord-select{font-family:var(--sans); font-size:14px; padding:9px 10px; border:1px solid var(--panel-line); border-radius:3px; width:100%; background:#fff;}
+  .sz-group{border-bottom:1px solid var(--panel-line);}
+  .sz-group:last-child{border-bottom:none;}
+  .sz-head{display:flex; align-items:center; gap:10px; padding:10px 12px; cursor:pointer; background:#fff;}
+  .sz-head:hover{background:#f7f8f6;}
+  .sz-size{font-family:var(--display); font-weight:700; font-size:16px; color:var(--graphite);}
+  .sz-codes{flex:1; font-family:var(--mono); font-size:11px; color:var(--steel); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .sz-chev{color:var(--steel); font-size:12px;}
+  .sz-sheet{padding:5px 12px; background:var(--panel); font-family:var(--mono); font-size:11.5px; font-weight:600; color:var(--brand); border-top:1px solid var(--panel-line);}
+  .new-badge{font-size:10px; background:#e1efe6; color:var(--live); padding:1px 6px; border-radius:2px; margin-left:6px; font-family:var(--sans); font-weight:600;}
+  .ord-split{background:none; border:1px solid var(--panel-line); color:var(--steel); font-size:11.5px; padding:4px 8px; border-radius:3px; cursor:pointer; font-family:var(--sans);}
+  .ord-split:hover{border-color:var(--brand); color:var(--brand);}
 </style>
 </head>
 <body>
@@ -377,21 +389,24 @@
         <div><label for="ordCustomer">Customer name</label><input id="ordCustomer" type="text" placeholder="e.g. GENETECH"></div>
         <div><label for="ordPo">PO number</label><input id="ordPo" type="text" placeholder="e.g. 26000732"></div>
         <div><label for="ordPoDate">PO date</label><input id="ordPoDate" type="date"></div>
-        <div><label for="ordDelivery">Delivery date (all cables)</label><input id="ordDelivery" type="date"></div>
-        <div><label for="ordDelStatus">…or status (all cables)</label>
-          <select id="ordDelStatus" style="font-family:var(--sans); font-size:14px; padding:9px 10px; border:1px solid var(--panel-line); border-radius:3px; width:100%; background:#fff;">
-            <option value="">No status</option>
+        <div><label for="ordDelSelect">Delivery (all cables)</label>
+          <select id="ordDelSelect" class="ord-select">
+            <option value="">Choose…</option>
             <option value="TBA">TBA — to be advised</option>
             <option value="WP">WP — waiting production</option>
             <option value="WPC">WPC — waiting payment clear</option>
-          </select></div>
+            <option value="date">Specific date…</option>
+          </select>
+          <input id="ordDelivery" type="date" style="display:none; margin-top:6px;">
+        </div>
       </div>
-      <div class="hint" style="margin:10px 0 0;">Every cable needs either a delivery date or a status (TBA, WP or WPC). Set it once here, or choose it for each cable below. A cable with neither cannot be reserved.</div>
+      <div class="hint" style="margin:10px 0 0;">Every cable needs a delivery date or a status (TBA, WP or WPC). Set it once here, or change it on a single cable below. A cable with neither cannot be reserved.</div>
     </div>
     <div class="reps-card">
       <div class="rc-title">Cables on this PO</div>
-      <input id="ordSearch" class="search-big" type="search" placeholder="Search a cable to add, e.g. 2.5mm 4 core black" style="width:100%; font-family:var(--sans); border:1px solid var(--panel-line); border-radius:3px; background:#fff;">
+      <input id="ordSearch" class="search-big" type="search" placeholder="Search a size, e.g. 25mm 3 core or 25mm 3c" style="width:100%; font-family:var(--sans); border:1px solid var(--panel-line); border-radius:3px; background:#fff;">
       <div class="ord-pick" id="ordPick"></div>
+      <div style="margin:8px 0 4px;"><button class="link-btn" id="ordCustomBtn">+ New stock code line (cable not in the system yet)</button></div>
       <div id="ordLines"></div>
       <div class="ord-actions">
         <span id="ordSummary">No cables added yet</span>
@@ -438,6 +453,32 @@
       <span>Customer</span><span>PO number</span><span>Qty</span><span>Delivery</span>
     </div>
     <div class="order-list" id="omList"></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="customModal">
+  <div class="adjust-modal">
+    <h3>New stock code line</h3>
+    <div class="am-meta">For a cable that is not in the system yet. It is created with zero stock, so the reserved quantity shows as backorder until stock is received.</div>
+    <label for="cuCode">Stock code</label>
+    <input id="cuCode" list="cuCodes" type="text" placeholder="e.g. CU-XSP">
+    <datalist id="cuCodes"></datalist>
+    <label for="cuSize">Size</label>
+    <input id="cuSize" type="text" placeholder="e.g. 25mm">
+    <label for="cuDetail">Spec (optional)</label>
+    <input id="cuDetail" type="text" placeholder="e.g. 3 core">
+    <label for="cuColour">Colour / description</label>
+    <input id="cuColour" type="text" placeholder="e.g. Black mtr">
+    <label for="cuUnit">Unit</label>
+    <select id="cuUnit" class="ord-select" style="margin-bottom:14px;">
+      <option value="meter">Meter</option>
+      <option value="coil">Coil</option>
+      <option value="kg">Kg</option>
+    </select>
+    <div class="adjust-actions">
+      <button class="mini-btn" id="cuCancel">Cancel</button>
+      <button class="mini-btn ok" id="cuAdd">Add line</button>
+    </div>
   </div>
 </div>
 
@@ -749,21 +790,32 @@ function populateCategorySelect(sel){
   if(ordered.includes(current)) sel.value = current;
 }
 
+/* "25mm 3c", "25 3core", "3 cores 25mm" all mean: 25mm, 3 core. Numbers match whole numbers only (25 does not match 125). */
+function searchTokens(term){
+  let q = String(term).toLowerCase().replace(/[,;]+/g, ' ');
+  q = q.replace(/(\d+)\s*(?:cores?|c)\b/g, '$1 core');
+  q = q.replace(/(\d+(?:\.\d+)?)\s*mm2?\b/g, '$1mm');
+  return q.match(/\d+\s+core|\S+/g) || [];
+}
+function tokenHits(hay, t){
+  const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if(/^\d+\s+core$/.test(t)) return new RegExp('(^|[^\\d])' + t.replace(/\s+/, '\\s*') + '(?![a-z])').test(hay);
+  if(/^\d+(\.\d+)?(mm)?$/.test(t)) return new RegExp('(^|[^\\d.])' + esc(t) + '(?!\\d)').test(hay);
+  return hay.includes(t);
+}
+function matchesTerm(c, term){
+  const hay = (c.sheet + ' ' + c.size + ' ' + c.detail + ' ' + c.colour + ' ' + c.unit).toLowerCase();
+  return searchTokens(term).every(t => tokenHits(hay, t));
+}
+const natCmp = (x, y) => String(x).localeCompare(String(y), undefined, {numeric:true});
 function filterResults({term, cat, unit, watchOnly}){
   let results = catalog;
   if(watchOnly) results = results.filter(c=>watchlist.has(itemKey(c)));
   if(cat) results = results.filter(c=>c.sheet===cat);
   if(unit) results = results.filter(c=>c.unit===unit);
-  if(term){
-    const tokens = term.toLowerCase().split(/\s+/).filter(Boolean);
-    results = results.filter(c=>{
-      const hay = (c.sheet+' '+c.size+' '+c.detail+' '+c.colour+' '+c.unit).toLowerCase();
-      return tokens.every(t=>hay.includes(t));
-    });
-  }
-  const nat = (x,y)=> String(x).localeCompare(String(y), undefined, {numeric:true});
+  if(term) results = results.filter(c=>matchesTerm(c, term));
   const seqOf = c => (typeof c.seq === 'number' ? c.seq : 1e9);   // items without a position go last in their category
-  return [...results].sort((a,b)=> catRank(a.sheet)-catRank(b.sheet) || (seqOf(a)-seqOf(b)) || nat(a.size,b.size) || nat(a.detail,b.detail) || nat(a.colour,b.colour));
+  return [...results].sort((a,b)=> catRank(a.sheet)-catRank(b.sheet) || (seqOf(a)-seqOf(b)) || natCmp(a.size,b.size) || natCmp(a.detail,b.detail) || natCmp(a.colour,b.colour));
 }
 
 function groupBySizeSpec(items){
@@ -1283,46 +1335,21 @@ document.getElementById('markReadBtn').addEventListener('click', ()=>{
 document.getElementById('txnMoreBtn').addEventListener('click', ()=>{ txnExpanded = !txnExpanded; renderTxnLog(); });
 
 /* ---------- Order tab: reserve stock for one PO with many cables ---------- */
-let ordLines = [];   // {id, qty, delivery}
+let ordLines = [];        // {uid, id, custom, qty, mode, delivery}   id = existing cable, custom = new stock code
+let ordUid = 1;
+const pickOpen = new Set();
 function todayStr(){ const d = new Date(), p = n=>String(n).padStart(2,'0'); return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate()); }
 function isoDay(s){ return s ? s + 'T00:00:00.000Z' : null; }
 function itemById(id){ return catalog.find(c=>c.id === id); }
+function virtualItem(c){ return {id:'(new)', sheet:c.sheet, size:c.size, detail:c.detail || '', colour:c.colour, unit:c.unit, stock:0, orders:[], activity:[], isNew:true}; }
+function lineItem(l){ return l.id ? itemById(l.id) : (l.custom ? virtualItem(l.custom) : null); }
+function lineTargetId(l){ return l.id || itemDocId(l.custom); }
+function lineByUid(uid){ return ordLines.find(l=>String(l.uid) === String(uid)); }
 
-function renderOrderPick(){
-  const el = document.getElementById('ordPick');
-  const term = document.getElementById('ordSearch').value.trim();
-  if(!term){ el.innerHTML = ''; return; }
-  const all = filterResults({term, cat:'', unit:'', watchOnly:false});
-  const added = new Set(ordLines.map(l=>l.id));
-  el.innerHTML = all.length
-    ? all.slice(0, 15).map(it=>`<div class="pick-row ${added.has(it.id)?'added':''}" data-id="${escapeHtml(it.id)}">
-        <div class="pk-main"><div class="ol-name">${escapeHtml(it.colour)}</div><div class="ol-sub">${escapeHtml(it.sheet)} · ${escapeHtml(it.size)}${it.detail?' · '+escapeHtml(it.detail):''}</div></div>
-        <div class="pk-stock">${escapeHtml(fmtStock(it))}</div>
-        <div class="pk-add">${added.has(it.id)?'Added':'+ Add'}</div></div>`).join('') + (all.length > 15 ? `<div class="empty" style="padding:8px;">Showing 15 of ${all.length} — type more to narrow down.</div>` : '')
-    : '<div class="empty" style="padding:12px;">No matching cable.</div>';
-}
-
-function lineWarn(l){
-  const it = itemById(l.id), q = parseFloat(l.qty);
-  if(!it) return 'This cable is no longer in the database.';
-  if(!isNaN(q) && q > it.stock) return 'Only ' + fmtStock(it) + ' available — ' + r2(q - Math.max(0, it.stock)) + ' ' + unitSuffix(it.unit) + ' will go on backorder.';
-  return '';
-}
-function updateOrderLive(){
-  ordLines.forEach(l=>{
-    const it = itemById(l.id);
-    const av = document.querySelector('.ord-avail b[data-id="' + CSS.escape(l.id) + '"]');
-    if(av && it) av.textContent = fmtStock(it);
-    const w = document.querySelector('.ord-warn[data-id="' + CSS.escape(l.id) + '"]');
-    if(w) w.textContent = [lineWarn(l), lineDelWarn(l)].filter(Boolean).join(' ');
-  });
-  const n = ordLines.length, filled = ordLines.filter(l=>parseFloat(l.qty) > 0).length;
-  document.getElementById('ordSummary').textContent = n ? `${n} cable${n===1?'':'s'} · ${filled} with quantity` : 'No cables added yet';
-}
+/* delivery: one choice — a date, TBA, WP or WPC */
 function headerDelivery(){
-  const d = document.getElementById('ordDelivery').value;
-  if(d) return {kind:'date', value:d};
-  const s = document.getElementById('ordDelStatus').value;
+  const s = document.getElementById('ordDelSelect').value;
+  if(s === 'date'){ const d = document.getElementById('ordDelivery').value; return d ? {kind:'date', value:d} : {kind:'none', value:''}; }
   if(s) return {kind:'status', value:s};
   return {kind:'none', value:''};
 }
@@ -1342,43 +1369,113 @@ function lineDelivery(l){
   return '';
 }
 function lineDelWarn(l){ return lineDelivery(l) ? '' : 'Choose a delivery date, or TBA / WP / WPC, before reserving.'; }
-function renderOrderLines(focusId){
+function lineWarn(l){
+  const q = parseFloat(l.qty);
+  if(!(q > 0)) return '';
+  const tid = lineTargetId(l), base = itemById(tid);
+  if(!base) return l.custom ? 'New stock code — the whole quantity goes on backorder until stock is received.' : 'This cable is no longer in the database.';
+  const same = ordLines.filter(x=>lineTargetId(x) === tid);
+  const total = same.reduce((s,x)=>s + (parseFloat(x.qty) > 0 ? parseFloat(x.qty) : 0), 0);
+  if(total > base.stock) return 'Only ' + fmtStock(base) + ' available' + (same.length > 1 ? ' for all lines of this cable' : '') + ' — ' + r2(total - Math.max(0, base.stock)) + ' ' + unitSuffix(base.unit) + ' will go on backorder.';
+  return '';
+}
+
+/* step 1: choose the size — step 2: choose the stock code (and colour / roll) */
+function groupForPicker(results){
+  const groups = new Map();
+  results.forEach(it=>{
+    const k = it.size + '|' + it.detail;
+    if(!groups.has(k)) groups.set(k, {key:k, size:it.size, detail:it.detail, sheets:new Map()});
+    const g = groups.get(k);
+    if(!g.sheets.has(it.sheet)) g.sheets.set(it.sheet, []);
+    g.sheets.get(it.sheet).push(it);
+  });
+  return [...groups.values()].sort((a,b)=>natCmp(a.size, b.size) || natCmp(a.detail, b.detail));
+}
+function renderOrderPick(){
+  const el = document.getElementById('ordPick');
+  const term = document.getElementById('ordSearch').value.trim();
+  if(!term){ el.innerHTML = ''; return; }
+  const all = filterResults({term, cat:'', unit:'', watchOnly:false});
+  if(!all.length){ el.innerHTML = '<div class="empty" style="padding:12px;">No matching cable. Use “+ New stock code line” below if it is not in the system yet.</div>'; return; }
+  const groups = groupForPicker(all);
+  const added = new Map();
+  ordLines.forEach(l=>{ if(l.id) added.set(l.id, (added.get(l.id) || 0) + 1); });
+  const shown = groups.slice(0, 12);
+  el.innerHTML = shown.map(g=>{
+    const open = groups.length === 1 || pickOpen.has(g.key);
+    const codes = [...g.sheets.keys()];
+    let body = '';
+    if(open){
+      body = [...g.sheets.entries()].map(([sheet, items])=>
+        `<div class="sz-sheet">${escapeHtml(sheet)}</div>` + items.map(it=>{
+          const n = added.get(it.id) || 0;
+          return `<div class="pick-row ${n?'added':''}" data-id="${escapeHtml(it.id)}">
+            <div class="pk-main"><div class="ol-name">${escapeHtml(it.colour)}</div></div>
+            <div class="pk-stock">${escapeHtml(fmtStock(it))}</div>
+            <div class="pk-add">${n ? 'Added ×' + n : '+ Add'}</div></div>`;
+        }).join('')).join('');
+    }
+    return `<div class="sz-group"><div class="sz-head" data-key="${escapeHtml(g.key)}">
+      <span class="sz-size">${escapeHtml(g.size)}${g.detail ? ' · ' + escapeHtml(g.detail) : ''}</span>
+      <span class="sz-codes">${escapeHtml(codes.join(' · '))}</span>
+      <span class="sz-chev">${open ? '▾' : '▸'}</span></div>${body}</div>`;
+  }).join('') + (groups.length > 12 ? `<div class="empty" style="padding:8px;">Showing 12 of ${groups.length} sizes — type more to narrow down.</div>` : '');
+}
+
+function updateOrderLive(){
+  ordLines.forEach(l=>{
+    const it = lineItem(l);
+    const av = document.querySelector('.ord-avail b[data-uid="' + l.uid + '"]');
+    if(av && it) av.textContent = l.custom ? 'new item' : fmtStock(it);
+    const w = document.querySelector('.ord-warn[data-uid="' + l.uid + '"]');
+    if(w) w.textContent = [lineWarn(l), lineDelWarn(l)].filter(Boolean).join(' ');
+  });
+  const n = ordLines.length, filled = ordLines.filter(l=>parseFloat(l.qty) > 0).length;
+  document.getElementById('ordSummary').textContent = n ? `${n} line${n===1?'':'s'} · ${filled} with quantity` : 'No cables added yet';
+}
+function renderOrderLines(focusUid){
   const el = document.getElementById('ordLines');
   el.innerHTML = ordLines.map(l=>{
-    const it = itemById(l.id);
+    const it = lineItem(l);
     if(!it) return '';
-    return `<div class="ord-line" data-id="${escapeHtml(l.id)}">
-      <div class="ol-item"><div class="ol-name">${escapeHtml(it.colour)}</div><div class="ol-sub">${escapeHtml(it.sheet)} · ${escapeHtml(it.size)}${it.detail?' · '+escapeHtml(it.detail):''}</div></div>
-      <div class="ord-avail">Available <b data-id="${escapeHtml(l.id)}">${escapeHtml(fmtStock(it))}</b></div>
-      <input class="ord-qty" type="number" min="0" step="any" placeholder="Qty (${unitSuffix(it.unit)})" value="${escapeHtml(l.qty)}" data-id="${escapeHtml(l.id)}">
-      <select class="ord-dsel" data-id="${escapeHtml(l.id)}" style="font-family:var(--sans); font-size:13px; padding:9px 8px; border:1px solid var(--panel-line); border-radius:3px; background:#fff; max-width:200px;">
+    const u = l.uid;
+    return `<div class="ord-line" data-uid="${u}">
+      <div class="ol-item"><div class="ol-name">${escapeHtml(it.colour)}${l.custom?'<span class="new-badge">new stock code</span>':''}</div><div class="ol-sub">${escapeHtml(it.sheet)} · ${escapeHtml(it.size)}${it.detail?' · '+escapeHtml(it.detail):''}</div></div>
+      <div class="ord-avail">Available <b data-uid="${u}">${escapeHtml(l.custom ? 'new item' : fmtStock(it))}</b></div>
+      <input class="ord-qty" type="number" min="0" step="any" placeholder="Qty (${unitSuffix(it.unit)})" value="${escapeHtml(l.qty)}" data-uid="${u}">
+      <select class="ord-dsel" data-uid="${u}" style="font-family:var(--sans); font-size:13px; padding:9px 8px; border:1px solid var(--panel-line); border-radius:3px; background:#fff; max-width:200px;">
         <option value="" ${!l.mode?'selected':''}>${escapeHtml(inheritLabel())}</option>
         <option value="TBA" ${l.mode==='TBA'?'selected':''}>TBA</option>
         <option value="WP" ${l.mode==='WP'?'selected':''}>WP</option>
         <option value="WPC" ${l.mode==='WPC'?'selected':''}>WPC</option>
         <option value="date" ${l.mode==='date'?'selected':''}>Specific date…</option>
       </select>
-      ${l.mode==='date' ? `<input class="ord-del" type="date" value="${escapeHtml(l.delivery)}" data-id="${escapeHtml(l.id)}">` : ''}
-      <button class="ord-rm" data-id="${escapeHtml(l.id)}" title="Remove">×</button>
-      <div class="ord-warn" data-id="${escapeHtml(l.id)}"></div>
+      ${l.mode==='date' ? `<input class="ord-del" type="date" value="${escapeHtml(l.delivery)}" data-uid="${u}">` : ''}
+      <button class="ord-split" data-uid="${u}" title="Add another line for this cable, for example the part that is TBA">+ Another line</button>
+      <button class="ord-rm" data-uid="${u}" title="Remove">×</button>
+      <div class="ord-warn" data-uid="${u}"></div>
     </div>`;
   }).join('');
   updateOrderLive();
-  if(focusId){ const q = el.querySelector('.ord-qty[data-id="' + CSS.escape(focusId) + '"]'); if(q) q.focus(); }
+  if(focusUid){ const q = el.querySelector('.ord-qty[data-uid="' + focusUid + '"]'); if(q) q.focus(); }
   renderOrderPick();
 }
 function addOrderLine(id){
-  if(ordLines.some(l=>l.id === id)){ renderOrderLines(id); return; }
-  ordLines.push({id, qty:'', mode:'', delivery:''});
-  renderOrderLines(id);
+  const l = {uid:ordUid++, id, custom:null, qty:'', mode:'', delivery:''};
+  ordLines.push(l);
+  renderOrderLines(l.uid);
 }
+
 document.getElementById('ordSearch').addEventListener('input', renderOrderPick);
 document.getElementById('ordPick').addEventListener('click', e=>{
+  const head = e.target.closest('.sz-head');
+  if(head){ const k = head.dataset.key; if(pickOpen.has(k)) pickOpen.delete(k); else pickOpen.add(k); renderOrderPick(); return; }
   const row = e.target.closest('.pick-row');
   if(row) addOrderLine(row.dataset.id);
 });
 document.getElementById('ordLines').addEventListener('input', e=>{
-  const id = e.target.dataset.id; const l = ordLines.find(x=>x.id === id);
+  const l = lineByUid(e.target.dataset.uid);
   if(!l) return;
   if(e.target.classList.contains('ord-qty')) l.qty = e.target.value;
   if(e.target.classList.contains('ord-del')) l.delivery = e.target.value;
@@ -1386,34 +1483,73 @@ document.getElementById('ordLines').addEventListener('input', e=>{
 });
 document.getElementById('ordLines').addEventListener('change', e=>{
   if(!e.target.classList.contains('ord-dsel')) return;
-  const l = ordLines.find(x=>x.id === e.target.dataset.id);
+  const l = lineByUid(e.target.dataset.uid);
   if(!l) return;
   l.mode = e.target.value;
   renderOrderLines();
-  if(l.mode === 'date'){ const inp = document.querySelector('.ord-del[data-id="' + CSS.escape(l.id) + '"]'); if(inp) inp.focus(); }
+  if(l.mode === 'date'){ const inp = document.querySelector('.ord-del[data-uid="' + l.uid + '"]'); if(inp) inp.focus(); }
 });
-document.getElementById('ordDelivery').addEventListener('input', e=>{ if(e.target.value) document.getElementById('ordDelStatus').value = ''; renderOrderLines(); });
-document.getElementById('ordDelStatus').addEventListener('change', e=>{ if(e.target.value) document.getElementById('ordDelivery').value = ''; renderOrderLines(); });
 document.getElementById('ordLines').addEventListener('click', e=>{
-  const rm = e.target.closest('.ord-rm');
-  if(rm){ ordLines = ordLines.filter(l=>l.id !== rm.dataset.id); renderOrderLines(); }
-});
-function resetOrderForm(keepHeader){
-  ordLines = [];
-  if(!keepHeader){
-    document.getElementById('ordCustomer').value = ''; document.getElementById('ordPo').value = '';
-    document.getElementById('ordDelivery').value = ''; document.getElementById('ordDelStatus').value = '';
+  const sp = e.target.closest('.ord-split');
+  if(sp){
+    const k = ordLines.findIndex(l=>String(l.uid) === sp.dataset.uid);
+    if(k >= 0){ const src = ordLines[k]; const nl = {uid:ordUid++, id:src.id, custom:src.custom, qty:'', mode:'', delivery:''}; ordLines.splice(k + 1, 0, nl); renderOrderLines(nl.uid); }
+    return;
   }
+  const rm = e.target.closest('.ord-rm');
+  if(rm){ ordLines = ordLines.filter(l=>String(l.uid) !== rm.dataset.uid); renderOrderLines(); }
+});
+// header delivery: one choice (status or date)
+document.getElementById('ordDelSelect').addEventListener('change', e=>{
+  document.getElementById('ordDelivery').style.display = e.target.value === 'date' ? '' : 'none';
+  renderOrderLines();
+});
+document.getElementById('ordDelivery').addEventListener('input', renderOrderLines);
+
+/* a cable that is not in the system yet */
+function openCustomLine(){
+  document.getElementById('cuCodes').innerHTML = categoryOrder.map(c=>`<option value="${escapeHtml(c)}">`).join('');
+  ['cuCode','cuSize','cuDetail','cuColour'].forEach(id=>document.getElementById(id).value = '');
+  document.getElementById('cuUnit').value = 'meter';
+  document.getElementById('customModal').classList.add('active');
+  document.getElementById('cuCode').focus();
+}
+document.getElementById('ordCustomBtn').addEventListener('click', openCustomLine);
+document.getElementById('cuCancel').addEventListener('click', ()=>document.getElementById('customModal').classList.remove('active'));
+document.getElementById('customModal').addEventListener('click', e=>{ if(e.target.id === 'customModal') e.currentTarget.classList.remove('active'); });
+document.getElementById('cuAdd').addEventListener('click', ()=>{
+  const sheet = document.getElementById('cuCode').value.trim().toUpperCase();
+  let size = document.getElementById('cuSize').value.trim().replace(/\s+/g, '');
+  const detail = document.getElementById('cuDetail').value.trim();
+  const colour = document.getElementById('cuColour').value.trim();
+  const unit = document.getElementById('cuUnit').value;
+  if(!sheet || !size || !colour){ alert('Enter the stock code, size and colour / description.'); return; }
+  if(/^[\d.]+$/.test(size)) size += 'mm';
+  const c = {sheet, size, detail, colour, unit};
+  document.getElementById('customModal').classList.remove('active');
+  const existing = itemById(itemDocId(c));
+  if(existing){ addOrderLine(existing.id); showOrderStatus('That cable already exists in the system, so the existing one was added.', true); return; }
+  const l = {uid:ordUid++, id:null, custom:c, qty:'', mode:'', delivery:''};
+  ordLines.push(l);
+  renderOrderLines(l.uid);
+});
+
+function resetOrderForm(){
+  ordLines = [];
+  ['ordCustomer','ordPo','ordDelivery'].forEach(id=>document.getElementById(id).value = '');
+  document.getElementById('ordDelSelect').value = '';
+  document.getElementById('ordDelivery').style.display = 'none';
   document.getElementById('ordPoDate').value = todayStr();
   document.getElementById('ordSearch').value = '';
   renderOrderLines();
 }
-document.getElementById('ordClear').addEventListener('click', ()=>{ if(!ordLines.length || confirm('Clear this order form?')) resetOrderForm(false); });
+document.getElementById('ordClear').addEventListener('click', ()=>{ if(!ordLines.length || confirm('Clear this order form?')) resetOrderForm(); });
 
 function showOrderStatus(msg, ok){
   const el = document.getElementById('ordStatus');
   el.textContent = msg; el.className = 'import-status show ' + (ok ? 'ok' : 'err');
 }
+function lineLabel(l){ const it = lineItem(l); return it ? it.colour + ' (' + it.size + ')' : '?'; }
 document.getElementById('ordSubmit').addEventListener('click', async ()=>{
   if(!requireAdminName()) return;
   const customer = document.getElementById('ordCustomer').value.trim();
@@ -1422,44 +1558,59 @@ document.getElementById('ordSubmit').addEventListener('click', async ()=>{
   if(!customer){ alert('Enter the customer name.'); return; }
   if(!po){ alert('Enter the PO number.'); return; }
   if(!ordLines.length){ alert('Add at least one cable to the order.'); return; }
-  const bad = ordLines.filter(l=>!(parseFloat(l.qty) > 0)).map(l=>{ const it = itemById(l.id); return it ? it.colour + ' (' + it.size + ')' : l.id; });
+  const bad = ordLines.filter(l=>!(parseFloat(l.qty) > 0)).map(lineLabel);
   if(bad.length){ alert('Enter a quantity greater than zero for:\n\n' + bad.slice(0,10).join('\n') + (bad.length > 10 ? '\n…' : '')); return; }
-  const noDel = ordLines.filter(l=>!lineDelivery(l)).map(l=>{ const it = itemById(l.id); return it ? it.colour + ' (' + it.size + ')' : l.id; });
+  const noDel = ordLines.filter(l=>!lineDelivery(l)).map(lineLabel);
   if(noDel.length){ alert('Choose a delivery date, or TBA / WP / WPC, for:\n\n' + noDel.slice(0,10).join('\n') + (noDel.length > 10 ? '\n…' : '') + '\n\nA cable without a delivery date or status cannot be reserved.'); return; }
   if(orderIndex().some(e=>e.kind === 'order' && e.po && e.po.toUpperCase() === po.toUpperCase() && e.customer.toUpperCase() === customer.toUpperCase())){
     if(!confirm('PO ' + po + ' for ' + customer + ' already has reserved lines. Adding this will create a second entry for the same PO. Continue?')) return;
   }
   const over = ordLines.filter(l=>lineWarn(l));
-  if(over.length && !confirm(over.length + ' line(s) ask for more than the available stock and will go on backorder. Continue?')) return;
+  if(over.length && !confirm(over.length + ' line(s) ask for more than the available stock (or use a new stock code) and will go on backorder. Continue?')) return;
 
   const btn = document.getElementById('ordSubmit');
   btn.disabled = true; btn.textContent = 'Saving…';
   const actor = currentActor();
   const now = new Date().toISOString();
-  const ok = [], failed = [];
+  // one write per cable, even when it has several lines (e.g. part dated, part TBA)
+  const groups = new Map();
+  ordLines.forEach(l=>{
+    const tid = lineTargetId(l), existing = itemById(tid);
+    if(!groups.has(tid)) groups.set(tid, {tid, base: existing || virtualItem(l.custom), lines:[]});
+    groups.get(tid).lines.push(l);
+  });
+  const okGroups = [], failedTids = new Set();
   try{
-    for(let i = 0; i < ordLines.length; i += 10){
-      const part = ordLines.slice(i, i + 10);
-      const results = await Promise.allSettled(part.map(async l=>{
-        const it = itemById(l.id); if(!it) throw new Error('item not found');
-        const qty = r2(parseFloat(l.qty));
-        const entry = {customer, po, poDate:isoDay(poDate), deliveryDate: lineDelivery(l), qty, source:'app', by:actor, createdAt:now};
-        await db.collection('stock').doc(it.id).set(docBody(it, {stock:r2(it.stock - qty), lastChangedAt:now, previousStock:it.stock, delta:-qty, orders:[...(it.orders||[]), entry]}));
-        return {it, qty};
-      }));
-      results.forEach((r, k)=>{ if(r.status === 'fulfilled') ok.push(r.value); else failed.push(part[k]); });
+    for(const g of groups.values()){
+      if(g.base.isNew && !categoryOrder.includes(g.base.sheet)) await addNewCategory(g.base.sheet);
     }
-    if(ok.length){
+    const list = [...groups.values()];
+    for(let i = 0; i < list.length; i += 10){
+      const part = list.slice(i, i + 10);
+      const results = await Promise.allSettled(part.map(async g=>{
+        const base = g.base;
+        const entries = g.lines.map(l=>({customer, po, poDate:isoDay(poDate), deliveryDate:lineDelivery(l), qty:r2(parseFloat(l.qty)), source:'app', by:actor, createdAt:now}));
+        const total = r2(entries.reduce((s,x)=>s + x.qty, 0));
+        const {id: _ignored, isNew, ...clean} = base;
+        await db.collection('stock').doc(g.tid).set(docBody(clean, {stock:r2(base.stock - total), lastChangedAt:now, previousStock:base.stock, delta:-total, orders:[...(base.orders || []), ...entries]}));
+        return g;
+      }));
+      results.forEach((r, k)=>{ if(r.status === 'fulfilled') okGroups.push(r.value); else failedTids.add(part[k].tid); });
+    }
+    if(okGroups.length){
       try{
-        await appendTxns(ok.map(({it, qty})=>({ts:now, sheet:it.sheet, size:it.size, detail:it.detail, colour:it.colour, delta:-qty, customer, po, actor, kind:'reserve'})));
+        const txns = [];
+        okGroups.forEach(g=>g.lines.forEach(l=>txns.push({ts:now, sheet:g.base.sheet, size:g.base.size, detail:g.base.detail, colour:g.base.colour, delta:-r2(parseFloat(l.qty)), customer, po, actor, kind:'reserve'})));
+        await appendTxns(txns);
       }catch(e){ console.warn('log not saved', e); }
     }
-    if(failed.length){
-      showOrderStatus(ok.length + ' line(s) reserved, but ' + failed.length + ' failed and were NOT saved. Failed lines are still in the form — check them and press Reserve again for those only.', false);
-      ordLines = failed; renderOrderLines();
+    const savedLines = ordLines.filter(l=>!failedTids.has(lineTargetId(l))).length;
+    if(failedTids.size){
+      showOrderStatus(savedLines + ' line(s) reserved, but ' + failedTids.size + ' cable(s) failed and were NOT saved. They are still in the form — check them and press Reserve again for those only.', false);
+      ordLines = ordLines.filter(l=>failedTids.has(lineTargetId(l))); renderOrderLines();
     } else {
-      showOrderStatus('Reserved ' + ok.length + ' cable line' + (ok.length===1?'':'s') + ' for ' + customer + ' · PO ' + po + '. Stock is updated for everyone now.', true);
-      resetOrderForm(false);
+      showOrderStatus('Reserved ' + savedLines + ' line' + (savedLines===1?'':'s') + ' for ' + customer + ' · PO ' + po + '. Stock is updated for everyone now.', true);
+      resetOrderForm();
     }
   }catch(err){
     showOrderStatus('Could not save the order: ' + (err && err.message ? err.message : err), false);
